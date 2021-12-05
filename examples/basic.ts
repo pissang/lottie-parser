@@ -3,7 +3,7 @@ import * as echarts from 'echarts';
 
 parser.install(echarts);
 
-fetch('./data/adrock.json')
+fetch('./data/echarts_www_chart.json')
   .then((response) => response.json())
   .then((data) => {
     const chart = echarts.init(document.getElementById('main'), null, {

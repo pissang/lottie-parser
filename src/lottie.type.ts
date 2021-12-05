@@ -1,3 +1,4 @@
+// Modified from https://github.com/marcusstenbeck/lottie-types/blob/main/lottie.ts
 export enum BlendMode {
   Normal,
   Multiply,
@@ -168,7 +169,7 @@ export type Transform = {
   /** Transform Anchor Point. */
   a: MultiDimensional;
   /** Transform Position. */
-  p: PositionValue;
+  p: MultiDimensional;
   /** Transform Scale. */
   s: MultiDimensional;
   /** Transform Rotation. */
@@ -240,7 +241,7 @@ export type TextAnimatorDataProperty = {
   /** Transform Anchor Point. */
   a?: MultiDimensional;
   /** Transform Position. */
-  p?: PositionValue;
+  p?: MultiDimensional;
   /** Transform Scale. */
   s?: MultiDimensional;
   /** Transform Rotation. */
@@ -494,7 +495,8 @@ export enum ShapeType {
   Rect = 'rc',
   Ellipse = 'el',
   Fill = 'fl',
-  TransformShape = 'tr',
+  Stroke = 'st',
+  Transform = 'tr',
   Path = 'sh',
 }
 
@@ -543,9 +545,9 @@ export type ShapePropKeyframe = {
   /** [0-1] Jump to the end value. */
   h: number;
   /** or list of Bezier	Start value of keyframe segment. */
-  s: Bezier;
+  s: Bezier[];
   /** or list of Bezier	End value of keyframe segment. */
-  e: Bezier;
+  e: Bezier[];
 };
 
 export type ShapeProperty = {
@@ -565,6 +567,11 @@ export type PathShape = ShapeElement & {
   ks: ShapeProperty;
   /** index  */
   ind: number;
+};
+
+export type EllipseShape = ShapeElement & {
+  p: MultiDimensional;
+  s: MultiDimensional;
 };
 
 export type MultiDimensional = {
@@ -593,20 +600,6 @@ export type Value = {
   a?: number;
   /** Split values (???) */
   s?: boolean;
-};
-
-export type PositionValue = {
-  /**
-   * number | number[]: Non-animated value.
-   * OffsetKeyframe[]: Animated keyframes.
-   */
-  k: number | number[] | OffsetKeyframe[];
-  /** Property index. */
-  ix?: number;
-  /** [0-1] Whether it's animated. */
-  a?: number;
-  /** ??? */
-  l?: number;
 };
 
 export type KeyframeBezierHandle = {
@@ -650,7 +643,7 @@ export type TransformShape = ShapeElement & {
   /** Anchor point */
   a: MultiDimensional;
   /** Transform Position. */
-  p: PositionValue;
+  p: MultiDimensional;
   /** Transform Scale. */
   s: MultiDimensional;
   /** Transform Rotation. */
@@ -682,6 +675,17 @@ export enum FillRule {
   EvenOdd,
 }
 
+export enum LineJoin {
+  Miter = 1,
+  Round = 2,
+  Bevel = 3,
+}
+export enum LineCap {
+  Butt = 1,
+  Round = 2,
+  Square = 3,
+}
+
 export type FillShape = ShapeElement & {
   /** Fill Opacity. */
   o: Value;
@@ -689,6 +693,21 @@ export type FillShape = ShapeElement & {
   c: ColorValue;
   /** Fill rule. */
   r: FillRule;
+};
+
+export type StrokeShape = ShapeElement & {
+  /** Stroke Opacity. */
+  o: Value;
+  /** Stroke Color. */
+  c: ColorValue;
+  /** Stroke Line Width */
+  w: Value;
+  /** Miter Limit */
+  ml: number;
+  /** Stroke Line Join */
+  lj: LineJoin;
+  /** Stroke Line Cap */
+  lc: LineCap;
 };
 
 export type Asset = ImageAsset | PrecompAsset | AudioAsset | VideoAsset;
