@@ -411,7 +411,7 @@ function parseShapeRect(
   context: ParseContext
 ) {
   const attrs = {
-    type: 'rect',
+    type: 'lottie-shape-rect',
     // Should have no fill and stroke by default
     style: {
       fill: 'none',

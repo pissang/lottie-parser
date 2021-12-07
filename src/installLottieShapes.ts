@@ -97,6 +97,49 @@ export function install(echarts: {
     },
   });
 
+  const LottieShapeRect = echarts.graphic.extendShape({
+    type: 'lottie-shape-rect',
+    shape: {
+      r: 0,
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    },
+    buildPath(ctx, shape) {
+      let width = shape.width;
+      let height = shape.height;
+      let x = shape.x - width / 2;
+      let y = shape.y - height / 2;
+      let r = shape.r;
+      r = Math.min(width / 2, height / 2, r);
+      if (!r) {
+        ctx.rect(x, y, width, height);
+      } else {
+        // Convert width and height to positive for better borderRadius
+        if (width < 0) {
+          x = x + width;
+          width = -width;
+        }
+        if (height < 0) {
+          y = y + height;
+          height = -height;
+        }
+
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + width - r, y);
+        ctx.arc(x + width - r, y + r, r, -Math.PI / 2, 0);
+        ctx.lineTo(x + width, y + height - r);
+        ctx.arc(x + width - r, y + height - r, r, 0, Math.PI / 2);
+        ctx.lineTo(x + r, y + height);
+        ctx.arc(x + r, y + height - r, r, Math.PI / 2, Math.PI);
+        ctx.lineTo(x, y + r);
+        ctx.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
+      }
+    },
+  });
+
   echarts.graphic.registerShape('lottie-shape-path', LottieShapePath);
   echarts.graphic.registerShape('lottie-shape-ellipse', LottieShapeEllipse);
+  echarts.graphic.registerShape('lottie-shape-rect', LottieShapeRect);
 }
