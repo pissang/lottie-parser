@@ -99,6 +99,45 @@ function getMultiDimensionEasingBezierString(
   return;
 }
 
+function parseKeyframe(
+  kfs: Lottie.OffsetKeyframe[],
+  bezierEasingDimIndex: number,
+  context: ParseContext,
+  out: KeyframeAnimation,
+  setVal: (kfObj: any, val: any) => void
+) {
+  const kfsLen = kfs.length;
+  const start = kfs[0].t;
+  const end = kfs[kfsLen - 1].t;
+  const duration = end - start;
+
+  let prevKf;
+  for (let i = 0; i < kfsLen; i++) {
+    const kf = kfs[i];
+    const nextKf = kfs[i + 1];
+    const outKeyframe: KeyframeAnimationKeyframe = {
+      // Only use the first easing. TODO: Different easing?
+      easing: getMultiDimensionEasingBezierString(
+        kf,
+        nextKf,
+        bezierEasingDimIndex
+      ),
+      percent: (kf.t - start) / duration,
+    };
+    // Use end state of laster frame if start state not exits.
+    const startVal = kf.s || prevKf?.e;
+    if (startVal) {
+      setVal(outKeyframe, startVal);
+    }
+    out.keyframes!.push(outKeyframe);
+    prevKf = kf;
+  }
+  if (kfsLen) {
+    out.duration = context.frameTime * duration;
+    out.delay = context.frameTime * start;
+  }
+}
+
 function parseOffsetKeyframe(
   kfs: Lottie.OffsetKeyframe[],
   targetPropName: string,
@@ -107,25 +146,21 @@ function parseOffsetKeyframe(
   context: ParseContext,
   convertVal?: (val: number) => number
 ) {
-  const kfsLen = kfs.length;
-  const start = kfs[0].t;
-  const end = kfs[kfsLen - 1].t;
-  const duration = end - start;
-
+  const keyframeAnim = {
+    duration: 0,
+    delay: 0,
+    keyframes: [],
+  };
   // TODO merge if bezier easing is same.
   for (let dimIndex = 0; dimIndex < propNames.length; dimIndex++) {
-    const outKeyframes: KeyframeAnimationKeyframe[] = [];
     const propName = propNames[dimIndex];
-    for (let i = 0; i < kfsLen; i++) {
-      const kf = kfs[i];
-      const nextKf = kfs[i + 1];
-      const outKeyframe: KeyframeAnimationKeyframe = {
-        easing: getMultiDimensionEasingBezierString(kf, nextKf, dimIndex),
-        percent: (kf.t - start) / duration,
-      };
-      // Last keyframe may not have value.
-      if (kf.s) {
-        let val = getMultiDimensionValue(kf.s, dimIndex);
+    parseKeyframe(
+      kfs,
+      dimIndex,
+      context,
+      keyframeAnim,
+      (outKeyframe, startVal) => {
+        let val = getMultiDimensionValue(startVal, dimIndex);
         if (convertVal) {
           val = convertVal(val);
         }
@@ -133,15 +168,11 @@ function parseOffsetKeyframe(
           ? (outKeyframe[targetPropName] = {} as any)
           : outKeyframe)[propName] = val;
       }
-      outKeyframes.push(outKeyframe);
-    }
-    if (outKeyframes.length) {
-      keyframeAnimations.push({
-        duration: duration * context.frameTime,
-        delay: start * context.frameTime,
-        keyframes: outKeyframes,
-      });
-    }
+    );
+  }
+
+  if (keyframeAnim.keyframes.length) {
+    keyframeAnimations.push(keyframeAnim);
   }
 }
 
@@ -152,35 +183,18 @@ function parseColorOffsetKeyframe(
   keyframeAnimations: KeyframeAnimation[],
   context: ParseContext
 ) {
-  const kfsLen = kfs.length;
-  const start = kfs[0].t;
-  const end = kfs[kfsLen - 1].t;
-  const duration = end - start;
-
-  const outKeyframes: KeyframeAnimationKeyframe[] = [];
-
-  for (let i = 0; i < kfsLen; i++) {
-    const kf = kfs[i];
-    const nextKf = kfs[i + 1];
-    const outKeyframe: KeyframeAnimationKeyframe = {
-      // Only use the first easing. TODO: Different easing?
-      easing: getMultiDimensionEasingBezierString(kf, nextKf, 0),
-      percent: (kf.t - start) / duration,
-    };
-    // Last keyframe may not have value.
-    if (kf.s) {
-      (targetPropName
-        ? (outKeyframe[targetPropName] = {} as any)
-        : outKeyframe)[propName] = toColorString(kf.s);
-    }
-    outKeyframes.push(outKeyframe);
-  }
-  if (outKeyframes.length) {
-    keyframeAnimations.push({
-      duration: duration * context.frameTime,
-      delay: start * context.frameTime,
-      keyframes: outKeyframes,
-    });
+  const keyframeAnim = {
+    duration: 0,
+    delay: 0,
+    keyframes: [],
+  };
+  parseKeyframe(kfs, 0, context, keyframeAnim, (outKeyframe, startVal) => {
+    (targetPropName ? (outKeyframe[targetPropName] = {} as any) : outKeyframe)[
+      propName
+    ] = toColorString(startVal);
+  });
+  if (keyframeAnim.keyframes.length) {
+    keyframeAnimations.push(keyframeAnim);
   }
 }
 
@@ -358,40 +372,27 @@ function parseShapePaths(
       close: shape.ks.k.c,
     };
   } else if (Array.isArray(shape.ks.k)) {
-    const kfs = shape.ks.k;
-    const kfsLen = kfs.length;
-    const start = kfs[0].t;
-    const end = kfs[kfsLen - 1].t;
-    const duration = end - start;
-
-    const outKeyframes: KeyframeAnimationKeyframe[] = [];
-
-    for (let i = 0; i < kfsLen; i++) {
-      const kf = kfs[i];
-      const nextKf = kfs[i + 1];
-      const outKeyframe: KeyframeAnimationKeyframe = {
-        // Only use the first easing. TODO: Different easing?
-        easing: getMultiDimensionEasingBezierString(kf, nextKf, 0),
-        percent: (kf.t - start) / duration,
-      };
-      // Last keyframe may not have value.
-      if (kf.s && kf.s.length) {
-        // TODO why s is array?
+    const keyframeAnim = {
+      duration: 0,
+      delay: 0,
+      keyframes: [],
+    };
+    parseKeyframe(
+      shape.ks.k as any as Lottie.OffsetKeyframe[],
+      0,
+      context,
+      keyframeAnim,
+      (outKeyframe, startVal) => {
         outKeyframe.shape = {
-          in: kf.s[0].i,
-          out: kf.s[0].o,
-          v: kf.s[0].v,
-          close: kf.s[0].c,
+          in: startVal[0].i,
+          out: startVal[0].o,
+          v: startVal[0].v,
+          close: startVal[0].c,
         };
       }
-      outKeyframes.push(outKeyframe);
-    }
-    if (outKeyframes.length) {
-      animations.push({
-        duration: duration * context.frameTime,
-        delay: start * context.frameTime,
-        keyframes: outKeyframes,
-      });
+    );
+    if (keyframeAnim.keyframes.length) {
+      animations.push(keyframeAnim);
     }
   }
   return attrs;
@@ -493,9 +494,14 @@ function createNewGroupForAnchor(el: CustomElementOption) {
     };
     dummy.x = -anchorX || 0;
     dummy.y = -anchorY || 0;
-    dummy.keyframeAnimations = [nonTransformAnimations, ...anchorAnimations];
 
-    el.keyframeAnimation = transformAnimations;
+    if (nonTransformAnimations.length || anchorAnimations.length) {
+      dummy.keyframeAnimations = [nonTransformAnimations, ...anchorAnimations];
+    }
+
+    if (transformAnimations.length) {
+      el.keyframeAnimation = transformAnimations;
+    }
     Object.assign(el, transformAttrs);
 
     return el;
@@ -504,7 +510,7 @@ function createNewGroupForAnchor(el: CustomElementOption) {
   return el;
 }
 
-function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
+function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
   function tryCreateShape(
     shape: Lottie.ShapeElement,
     keyframeAnimations: KeyframeAnimation[]
@@ -588,7 +594,9 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
 
     ecEls.forEach((el, idx) => {
       util.merge(el, attrs, true);
-      el.keyframeAnimation = keyframeAnimations;
+      if (keyframeAnimations.length) {
+        el.keyframeAnimation = keyframeAnimations;
+      }
 
       ecEls[idx] = createNewGroupForAnchor(el);
     });
@@ -599,13 +607,16 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
   const keyframeAnimations: KeyframeAnimation[] = [];
   parseTransforms(layer.ks, attrs, keyframeAnimations, context);
 
-  return createNewGroupForAnchor({
+  const layerGroup: CustomElementOption = {
     type: 'group',
     name: layer.nm,
     ...attrs,
-    keyframeAnimation: keyframeAnimations,
     children: parseIterations(layer.shapes),
-  });
+  };
+  if (keyframeAnimations.length) {
+    layerGroup.keyframeAnimation = keyframeAnimations;
+  }
+  return createNewGroupForAnchor(layerGroup);
 }
 
 export function parse(data: Lottie.Animation) {
@@ -622,7 +633,7 @@ export function parse(data: Lottie.Animation) {
   layers?.forEach((layer) => {
     switch (layer.ty) {
       case Lottie.LayerType.shape:
-        elements.push(createShapes(layer as Lottie.ShapeLayer, context));
+        elements.push(parseShapeLayer(layer as Lottie.ShapeLayer, context));
     }
   });
 

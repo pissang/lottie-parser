@@ -10,6 +10,14 @@ fetch('./data/echarts_www_chart.json')
       renderer: 'svg',
     });
     const result = parser.parse(data);
+
+    // function childrenHasName(el, name) {
+    //   return !!(
+    //     el.name === name ||
+    //     (el.children &&
+    //       el.children.find((child) => childrenHasName(child, name)))
+    //   );
+    // }
     chart.setOption({
       backgroundColor: '#000',
       graphic: {
