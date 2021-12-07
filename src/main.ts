@@ -16,6 +16,14 @@ interface KeyframeAnimation {
   keyframes?: Record<string, any>[];
 }
 
+interface CustomElementOption extends ElementProps {
+  type: string;
+  anchorX?: number;
+  anchorY?: number;
+  keyframeAnimation?: KeyframeAnimation[];
+  children?: CustomElementOption[];
+}
+
 class ParseContext {
   frameTime = 1000 / 30;
   startFrame = 0;
@@ -246,7 +254,7 @@ function parseTransforms(
     // zrender has inversed rotation
     (val) => -(val / 180) * Math.PI
   );
-  parseValue(ks.a, attrs, '', ['originX', 'originY'], animations, context);
+  parseValue(ks.a, attrs, '', ['anchorX', 'anchorY'], animations, context);
 
   // TODO opacity.
   // TODO sk: skew, sa: skew axis
@@ -417,8 +425,83 @@ function parseShapeEllipse(
   };
 
   parseValue(shape.p, attrs, 'shape', ['cx', 'cy'], animations, context);
-  parseValue(shape.s, attrs, 'shape', ['rx', 'ry'], animations, context);
+  parseValue(
+    shape.s,
+    attrs,
+    'shape',
+    ['rx', 'ry'],
+    animations,
+    context,
+    (val) => val / 2
+  );
   return attrs;
+}
+
+function pickKeyframeAnimationsByKeys(
+  keyframeAnimations: KeyframeAnimation[],
+  keyNames: string[]
+) {
+  const animationsWithKey: KeyframeAnimation[] = [];
+  const animationsWithoutKey: KeyframeAnimation[] = [];
+
+  keyframeAnimations.forEach((kfAnim) => {
+    const hasKey = !!kfAnim.keyframes?.find((kf) => {
+      return !!keyNames.find((keyName) => kf[keyName] != null);
+    });
+    if (hasKey) {
+      animationsWithKey.push(kfAnim);
+    } else {
+      animationsWithoutKey.push(kfAnim);
+    }
+  });
+
+  return [animationsWithKey, animationsWithoutKey];
+}
+
+function pickProps(obj: any, keyNames: string[]) {
+  const picked: any = {};
+  const other: any = {};
+  Object.keys(obj).forEach((key) => {
+    if (keyNames.indexOf(key) >= 0) {
+      picked[key] = obj[key];
+    } else {
+      other[key] = obj[key];
+    }
+  });
+  return [picked, other];
+}
+
+const transformKeys = ['x', 'y', 'scaleX', 'scaleY', 'rotation'];
+function createNewGroupForAnchor(el: CustomElementOption) {
+  const keyframeAnimations = el.keyframeAnimation;
+  const [anchorAnimations, otherAnimtions] = pickKeyframeAnimationsByKeys(
+    keyframeAnimations || [],
+    ['anchorX', 'anchorY']
+  );
+  const anchorX = (el as any).anchorX;
+  const anchorY = (el as any).anchorY;
+  // echarts doesn't have anchor transform. Use a separate group.
+  if (anchorX || anchorY || anchorAnimations.length) {
+    const [transformAnimations, nonTransformAnimations] =
+      pickKeyframeAnimationsByKeys(otherAnimtions, transformKeys);
+    const [transformAttrs, nonTransformAttrs] = pickProps(el, transformKeys);
+
+    const dummy = nonTransformAttrs;
+    el = {
+      type: 'group',
+      children: [dummy],
+    };
+    dummy.x = -anchorX || 0;
+    dummy.y = -anchorY || 0;
+    dummy.keyframeAnimations = [nonTransformAnimations, ...anchorAnimations];
+
+    el.keyframeAnimation = transformAnimations;
+    Object.assign(el, transformAttrs);
+
+    return el;
+  }
+
+  return el;
 }
 
 function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
@@ -457,6 +540,8 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
     const ecEls: any[] = [];
     const attrs: Record<string, any> = {};
     const keyframeAnimations: KeyframeAnimation[] = [];
+    // Order is reversed
+    shapes = shapes.slice().reverse();
     shapes.forEach((shape) => {
       let ecEl;
       switch (shape.ty) {
@@ -466,6 +551,7 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
             children: parseIterations((shape as Lottie.GroupShapeElement).it),
           };
           break;
+        // TODO Multiple fill and stroke
         case Lottie.ShapeType.Fill:
           parseFill(
             shape as Lottie.FillShape,
@@ -481,6 +567,7 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
             keyframeAnimations,
             context
           );
+          break;
         case Lottie.ShapeType.Transform:
           parseTransforms(
             shape as Lottie.TransformShape,
@@ -489,17 +576,21 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
             context
           );
           break;
+        // TODO Multiple shapes.
         default:
           ecEl = tryCreateShape(shape, keyframeAnimations);
       }
       if (ecEl) {
+        ecEl.name = shape.nm;
         ecEls.push(ecEl);
       }
     });
 
-    ecEls.forEach((el) => {
+    ecEls.forEach((el, idx) => {
       util.merge(el, attrs, true);
       el.keyframeAnimation = keyframeAnimations;
+
+      ecEls[idx] = createNewGroupForAnchor(el);
     });
     return ecEls;
   }
@@ -508,12 +599,13 @@ function createShapes(layer: Lottie.ShapeLayer, context: ParseContext) {
   const keyframeAnimations: KeyframeAnimation[] = [];
   parseTransforms(layer.ks, attrs, keyframeAnimations, context);
 
-  return {
+  return createNewGroupForAnchor({
     type: 'group',
+    name: layer.nm,
     ...attrs,
     keyframeAnimation: keyframeAnimations,
     children: parseIterations(layer.shapes),
-  };
+  });
 }
 
 export function parse(data: Lottie.Animation) {
@@ -525,7 +617,9 @@ export function parse(data: Lottie.Animation) {
 
   const elements: any[] = [];
 
-  data.layers?.forEach((layer) => {
+  // Order is reversed
+  const layers = data.layers?.slice().reverse();
+  layers?.forEach((layer) => {
     switch (layer.ty) {
       case Lottie.LayerType.shape:
         elements.push(createShapes(layer as Lottie.ShapeLayer, context));

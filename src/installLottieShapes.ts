@@ -23,25 +23,34 @@ export function install(echarts: {
       ctx.moveTo(vPts[0][0], vPts[0][1]);
       for (let i = 1; i < len; i++) {
         const prev = i - 1;
-        ctx.bezierCurveTo(
-          vPts[prev][0] + outPts[prev][0],
-          vPts[prev][1] + outPts[prev][1],
-          vPts[i][0] + inPts[i][0],
-          vPts[i][1] + inPts[i][1],
-          vPts[i][0],
-          vPts[i][1]
-        );
+        if (inPts[i][0] || inPts[i][1] || outPts[prev][0] || outPts[prev][1]) {
+          ctx.bezierCurveTo(
+            vPts[prev][0] + outPts[prev][0],
+            vPts[prev][1] + outPts[prev][1],
+            vPts[i][0] + inPts[i][0],
+            vPts[i][1] + inPts[i][1],
+            vPts[i][0],
+            vPts[i][1]
+          );
+        } else {
+          ctx.lineTo(vPts[i][0], vPts[i][1]);
+        }
       }
 
       if (shape.close) {
-        ctx.bezierCurveTo(
-          vPts[len - 1][0] + outPts[len - 1][0],
-          vPts[len - 1][1] + outPts[len - 1][1],
-          vPts[0][0] + inPts[0][0],
-          vPts[0][1] + inPts[0][1],
-          vPts[0][0],
-          vPts[0][1]
-        );
+        const last = len - 1;
+        if (inPts[0][0] || inPts[0][1] || outPts[last][0] || outPts[last][1]) {
+          ctx.bezierCurveTo(
+            vPts[last][0] + outPts[last][0],
+            vPts[last][1] + outPts[last][1],
+            vPts[0][0] + inPts[0][0],
+            vPts[0][1] + inPts[0][1],
+            vPts[0][0],
+            vPts[0][1]
+          );
+        } else {
+          ctx.closePath();
+        }
       }
     },
   });
