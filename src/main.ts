@@ -1,5 +1,5 @@
 import * as Lottie from './lottie.type';
-import type { ElementProps, PathProps, RectProps } from 'zrender';
+import type { ElementProps, Group, PathProps, RectProps } from 'zrender';
 import { util } from 'zrender';
 import { install } from './installLottieShapes';
 // @ts-ignore
@@ -365,6 +365,11 @@ function parseShapePaths(
 ) {
   const attrs: any = {
     type: 'lottie-shape-path',
+    // Should have no fill and stroke by default
+    style: {
+      fill: 'none',
+      stroke: 'none',
+    },
   };
   if (isBezier(shape.ks.k)) {
     attrs.shape = {
@@ -407,6 +412,11 @@ function parseShapeRect(
 ) {
   const attrs = {
     type: 'rect',
+    // Should have no fill and stroke by default
+    style: {
+      fill: 'none',
+      stroke: 'none',
+    },
     shape: {},
   } as RectProps;
 
@@ -424,6 +434,11 @@ function parseShapeEllipse(
 ) {
   const attrs: any = {
     type: 'lottie-shape-ellipse',
+    // Should have no fill and stroke by default
+    style: {
+      fill: 'none',
+      stroke: 'none',
+    },
     shape: {},
   };
 
@@ -629,15 +644,34 @@ export function parse(data: Lottie.Animation) {
   context.startFrame = data.ip;
   context.endFrame = data.op;
 
-  const elements: any[] = [];
+  let elements: any[] = [];
 
   // Order is reversed
   const layers = data.layers?.slice().reverse();
+  const layerIndexMap: Record<number, CustomElementOption> = {};
   layers?.forEach((layer) => {
     switch (layer.ty) {
       case Lottie.LayerType.shape:
-        elements.push(parseShapeLayer(layer as Lottie.ShapeLayer, context));
+        const g = parseShapeLayer(layer as Lottie.ShapeLayer, context);
+        if (layer.ind != null) {
+          layerIndexMap[layer.ind] = g;
+        }
+        g.extra = {
+          layerParent: layer.parent,
+        };
+        elements.push(g);
+        break;
     }
+  });
+
+  // Build hierarchy
+  elements = elements.filter((el) => {
+    const parentLayer = layerIndexMap[el.extra.layerParent];
+    if (parentLayer) {
+      parentLayer.children?.push(el);
+      return false;
+    }
+    return true;
   });
 
   return {
