@@ -514,10 +514,24 @@ function createNewGroupForAnchor(el: CustomElementOption) {
     dummy.y = -anchorY || 0;
 
     if (nonTransformAnimations.length || anchorAnimations.length) {
+      anchorAnimations.forEach((anim) => {
+        anim.keyframes?.forEach((kf) => {
+          if (kf.anchorX) {
+            kf.x = -anchorX;
+            delete kf.anchorX;
+          }
+          if (kf.anchorY) {
+            kf.y = -anchorY;
+            delete kf.anchorY;
+          }
+        });
+      });
       dummy.keyframeAnimation = [
         ...nonTransformAnimations,
         ...anchorAnimations,
       ];
+    } else {
+      dummy.keyframeAnimation = undefined;
     }
 
     if (transformAnimations.length) {
