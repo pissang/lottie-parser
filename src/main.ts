@@ -504,23 +504,25 @@ function createNewGroupForAnchor(el: CustomElementOption) {
       pickKeyframeAnimationsByKeys(otherAnimtions, transformKeys);
     const [transformAttrs, nonTransformAttrs] = pickProps(el, transformKeys);
 
-    const dummy = nonTransformAttrs;
+    const dummy = nonTransformAttrs as CustomElementOption;
     el = {
       type: 'group',
       children: [dummy],
+      ...transformAttrs,
     };
     dummy.x = -anchorX || 0;
     dummy.y = -anchorY || 0;
 
     if (nonTransformAnimations.length || anchorAnimations.length) {
-      dummy.keyframeAnimations = [nonTransformAnimations, ...anchorAnimations];
+      dummy.keyframeAnimation = [
+        ...nonTransformAnimations,
+        ...anchorAnimations,
+      ];
     }
 
     if (transformAnimations.length) {
       el.keyframeAnimation = transformAnimations;
     }
-    Object.assign(el, transformAttrs);
-
     return el;
   }
 
