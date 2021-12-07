@@ -1,5 +1,5 @@
 import * as Lottie from './lottie.type';
-import type { ElementProps, Group, PathProps, RectProps } from 'zrender';
+import type { ElementProps, PathProps, RectProps } from 'zrender';
 import { util } from 'zrender';
 import { install } from './installLottieShapes';
 // @ts-ignore
@@ -636,20 +636,66 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
     return ecEls;
   }
 
-  const attrs: Record<string, any> = {};
-  const keyframeAnimations: KeyframeAnimation[] = [];
-  parseTransforms(layer.ks, attrs, keyframeAnimations, context);
-
   const layerGroup: CustomElementOption = {
     type: 'group',
-    name: layer.nm,
-    ...attrs,
     children: parseIterations(layer.shapes),
   };
-  if (keyframeAnimations.length) {
-    layerGroup.keyframeAnimation = keyframeAnimations;
-  }
   return createNewGroupForAnchor(layerGroup);
+}
+
+function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
+  let elements: any[] = [];
+
+  // Order is reversed
+  layers = layers.slice().reverse();
+  const layerIndexMap: Record<number, CustomElementOption> = {};
+  layers?.forEach((layer) => {
+    let layerGroup;
+    switch (layer.ty) {
+      case Lottie.LayerType.shape:
+        layerGroup = parseShapeLayer(layer as Lottie.ShapeLayer, context);
+        break;
+      case Lottie.LayerType.null:
+        layerGroup = {
+          type: 'group',
+          children: [],
+        };
+    }
+
+    if (layerGroup) {
+      const keyframeAnimations: KeyframeAnimation[] = [];
+      const attrs: Record<string, any> = {
+        name: layer.nm,
+      };
+      parseTransforms(layer.ks, attrs, keyframeAnimations, context);
+
+      if (keyframeAnimations.length) {
+        layerGroup.keyframeAnimation = keyframeAnimations;
+      }
+      Object.assign(layerGroup, attrs);
+      if (layer.ind != null) {
+        layerIndexMap[layer.ind] = layerGroup;
+      }
+      elements.push(
+        Object.assign(createNewGroupForAnchor(layerGroup), {
+          extra: {
+            layerParent: layer.parent,
+          },
+        })
+      );
+    }
+  });
+
+  // Build hierarchy
+  return elements.filter((el) => {
+    const parentLayer = layerIndexMap[el.extra.layerParent];
+    if (parentLayer) {
+      // Has anchor
+      parentLayer.children?.push(el);
+      return false;
+    }
+    return true;
+  });
 }
 
 export function parse(data: Lottie.Animation) {
@@ -660,35 +706,9 @@ export function parse(data: Lottie.Animation) {
   context.startFrame = data.ip;
   context.endFrame = data.op;
 
-  let elements: any[] = [];
+  data.assets?.forEach((asset) => {});
 
-  // Order is reversed
-  const layers = data.layers?.slice().reverse();
-  const layerIndexMap: Record<number, CustomElementOption> = {};
-  layers?.forEach((layer) => {
-    switch (layer.ty) {
-      case Lottie.LayerType.shape:
-        const g = parseShapeLayer(layer as Lottie.ShapeLayer, context);
-        if (layer.ind != null) {
-          layerIndexMap[layer.ind] = g;
-        }
-        g.extra = {
-          layerParent: layer.parent,
-        };
-        elements.push(g);
-        break;
-    }
-  });
-
-  // Build hierarchy
-  elements = elements.filter((el) => {
-    const parentLayer = layerIndexMap[el.extra.layerParent];
-    if (parentLayer) {
-      parentLayer.children?.push(el);
-      return false;
-    }
-    return true;
-  });
+  const elements = parseLayers(data.layers || [], context);
 
   return {
     width: data.w,
