@@ -1,5 +1,9 @@
 import type { graphic } from 'echarts';
 
+function isAroundEqual(a: number[], b: number[]) {
+  return Math.abs(a[0] - b[0]) < 1e-8 && Math.abs(a[1] - b[1]) < 1e-8;
+}
+
 export function install(echarts: {
   graphic: Pick<typeof graphic, 'registerShape' | 'extendShape'>;
 }) {
@@ -23,12 +27,15 @@ export function install(echarts: {
       ctx.moveTo(vPts[0][0], vPts[0][1]);
       for (let i = 1; i < len; i++) {
         const prev = i - 1;
-        if (inPts[i][0] || inPts[i][1] || outPts[prev][0] || outPts[prev][1]) {
+        if (
+          !isAroundEqual(outPts[prev], vPts[prev]) ||
+          !isAroundEqual(inPts[i], vPts[i])
+        ) {
           ctx.bezierCurveTo(
-            vPts[prev][0] + outPts[prev][0],
-            vPts[prev][1] + outPts[prev][1],
-            vPts[i][0] + inPts[i][0],
-            vPts[i][1] + inPts[i][1],
+            outPts[prev][0],
+            outPts[prev][1],
+            inPts[i][0],
+            inPts[i][1],
             vPts[i][0],
             vPts[i][1]
           );
@@ -39,12 +46,15 @@ export function install(echarts: {
 
       if (shape.close) {
         const last = len - 1;
-        if (inPts[0][0] || inPts[0][1] || outPts[last][0] || outPts[last][1]) {
+        if (
+          !isAroundEqual(outPts[last], vPts[last]) ||
+          !isAroundEqual(inPts[0], vPts[0])
+        ) {
           ctx.bezierCurveTo(
-            vPts[last][0] + outPts[last][0],
-            vPts[last][1] + outPts[last][1],
-            vPts[0][0] + inPts[0][0],
-            vPts[0][1] + inPts[0][1],
+            outPts[last][0],
+            outPts[last][1],
+            inPts[0][0],
+            inPts[0][1],
             vPts[0][0],
             vPts[0][1]
           );

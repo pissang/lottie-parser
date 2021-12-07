@@ -1,7 +1,9 @@
 import * as Lottie from './lottie.type';
-import type { ElementProps, EllipseProps, PathProps, RectProps } from 'zrender';
+import type { ElementProps, PathProps, RectProps } from 'zrender';
 import { util } from 'zrender';
 import { install } from './installLottieShapes';
+// @ts-ignore
+import { completeData } from './completeData';
 
 interface KeyframeAnimationKeyframe {
   easing?: string;
@@ -620,6 +622,7 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
 }
 
 export function parse(data: Lottie.Animation) {
+  completeData(data);
   const context = new ParseContext();
 
   context.frameTime = 1000 / (data.fr || 30);
