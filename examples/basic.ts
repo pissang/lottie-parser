@@ -1,28 +1,42 @@
-import * as parser from '../src/main';
+import * as lottieParser from '../src/main';
 import * as echarts from 'echarts';
 
-parser.install(echarts);
+lottieParser.install(echarts);
 
-fetch('./data/echarts-www/compatible.json')
+function childrenHasName(el, name) {
+  return !!(
+    el.name === name ||
+    (el.children && el.children.find((child) => childrenHasName(child, name)))
+  );
+}
+function setAnimationToLoop(elements) {
+  elements.forEach((el) => {
+    el.keyframeAnimation?.forEach((anim) => {
+      anim.loop = true;
+    });
+
+    if (el.children) {
+      setAnimationToLoop(el.children);
+    }
+  });
+}
+
+fetch('./data/kadokado-heart.json')
   .then((response) => response.json())
   .then((data) => {
     const chart = echarts.init(document.getElementById('main'), null, {
       renderer: 'svg',
     });
-    const result = parser.parse(data);
+    const result = lottieParser.parse(data);
 
-    // function childrenHasName(el, name) {
-    //   return !!(
-    //     el.name === name ||
-    //     (el.children &&
-    //       el.children.find((child) => childrenHasName(child, name)))
-    //   );
-    // }
+    setAnimationToLoop(result.elements);
+
     chart.setOption({
-      backgroundColor: '#000',
+      // backgroundColor: 'black',
       graphic: {
         elements: result.elements,
       },
     });
+
     console.log(result.elements);
   });

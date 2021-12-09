@@ -109,9 +109,7 @@ function parseKeyframe(
   setVal: (kfObj: any, val: any) => void
 ) {
   const kfsLen = kfs.length;
-  const start = kfs[0].t;
-  const end = kfs[kfsLen - 1].t;
-  const duration = end - start;
+  const duration = context.endFrame;
 
   let prevKf;
   for (let i = 0; i < kfsLen; i++) {
@@ -124,19 +122,28 @@ function parseKeyframe(
         nextKf,
         bezierEasingDimIndex
       ),
-      percent: (kf.t - start) / duration,
+      percent: kf.t / duration,
     };
     // Use end state of laster frame if start state not exits.
     const startVal = kf.s || prevKf?.e;
     if (startVal) {
       setVal(outKeyframe, startVal);
     }
+    if (kf.t > 0 && i === 0) {
+      // Set initial
+      const initialKeyframe = {
+        percent: 0,
+      };
+      if (startVal) {
+        setVal(initialKeyframe, startVal);
+      }
+      out.keyframes!.push(initialKeyframe);
+    }
     out.keyframes!.push(outKeyframe);
     prevKf = kf;
   }
   if (kfsLen) {
     out.duration = context.frameTime * duration;
-    out.delay = context.frameTime * start;
   }
 }
 
