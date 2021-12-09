@@ -165,11 +165,18 @@ export enum LayerType {
   light,
 }
 
+export type Position = {
+  // Not sure what this s mean
+  s: boolean;
+  x: Value;
+  y: Value;
+};
+
 export type Transform = {
   /** Transform Anchor Point. */
   a: MultiDimensional;
   /** Transform Position. */
-  p: MultiDimensional;
+  p: MultiDimensional | Position;
   /** Transform Scale. */
   s: MultiDimensional;
   /** Transform Rotation. */

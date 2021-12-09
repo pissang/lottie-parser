@@ -30,6 +30,11 @@ class ParseContext {
   frameTime = 1000 / 30;
   startFrame = 0;
   endFrame: number;
+
+  assetsLayersMap: Map<
+    string,
+    { asset: Lottie.PrecompAsset; elements: CustomElementOption[] }
+  > = new Map();
 }
 
 function isNumberArray(val: any): val is number[] {
@@ -257,7 +262,33 @@ function parseTransforms(
   animations: KeyframeAnimation[],
   context: ParseContext
 ) {
-  parseValue(ks.p, attrs, '', ['x', 'y'], animations, context);
+  if ((ks.p as Lottie.Position).s) {
+    parseValue(
+      (ks.p as Lottie.Position).x,
+      attrs,
+      '',
+      ['x'],
+      animations,
+      context
+    );
+    parseValue(
+      (ks.p as Lottie.Position).y,
+      attrs,
+      '',
+      ['y'],
+      animations,
+      context
+    );
+  } else {
+    parseValue(
+      ks.p as Lottie.MultiDimensional,
+      attrs,
+      '',
+      ['x', 'y'],
+      animations,
+      context
+    );
+  }
   parseValue(
     ks.s,
     attrs,
@@ -651,7 +682,7 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
 }
 
 function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
-  let elements: any[] = [];
+  let elements: CustomElementOption[] = [];
 
   // Order is reversed
   layers = layers.slice().reverse();
@@ -667,6 +698,12 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
           type: 'group',
           children: [],
         };
+        break;
+      case Lottie.LayerType.precomp:
+        layerGroup = {
+          type: 'group',
+        };
+        break;
     }
 
     if (layerGroup) {
@@ -686,6 +723,7 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
       elements.push(
         Object.assign(createNewGroupForAnchor(layerGroup), {
           extra: {
+            refId: (layer as Lottie.PrecompLayer).refId,
             layerParent: layer.parent,
           },
         })
@@ -693,16 +731,23 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
     }
   });
 
-  // Build hierarchy
-  return elements.filter((el) => {
-    const parentLayer = layerIndexMap[el.extra.layerParent];
-    if (parentLayer) {
-      // Has anchor
-      parentLayer.children?.push(el);
-      return false;
-    }
-    return true;
-  });
+  return {
+    // Build hierarchy
+    elements: elements.filter((el) => {
+      const parentLayer = layerIndexMap[el.extra?.layerParent as any];
+      if (parentLayer) {
+        // Has anchor
+        parentLayer.children?.push(el);
+        return false;
+      }
+      return true;
+    }),
+    elementsFlat: elements,
+  };
+}
+
+function isPrecompAsset(asset: Lottie.Asset): asset is Lottie.PrecompAsset {
+  return Array.isArray((asset as Lottie.PrecompAsset).layers);
 }
 
 export function parse(data: Lottie.Animation) {
@@ -713,9 +758,31 @@ export function parse(data: Lottie.Animation) {
   context.startFrame = data.ip;
   context.endFrame = data.op;
 
-  data.assets?.forEach((asset) => {});
+  let allElements: CustomElementOption[] = [];
+  data.assets?.forEach((asset) => {
+    if (isPrecompAsset(asset)) {
+      const { elements, elementsFlat } = parseLayers(
+        (asset as Lottie.PrecompAsset).layers,
+        context
+      );
 
-  const elements = parseLayers(data.layers || [], context);
+      allElements = allElements.concat(elementsFlat);
+
+      context.assetsLayersMap.set(asset.id, {
+        asset,
+        elements,
+      });
+    }
+  });
+
+  const { elements, elementsFlat } = parseLayers(data.layers || [], context);
+  [...allElements, ...elementsFlat].forEach((el) => {
+    const refId = el.extra?.refId as string;
+    const layer = context.assetsLayersMap.get(refId);
+    if (refId && layer) {
+      el.children = util.clone(layer.elements);
+    }
+  });
 
   return {
     width: data.w,

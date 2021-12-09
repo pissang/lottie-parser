@@ -21,7 +21,7 @@ function setAnimationToLoop(elements) {
   });
 }
 
-fetch('./data/kadokado-heart.json')
+fetch('./data/failed-location-verification.json')
   .then((response) => response.json())
   .then((data) => {
     const chart = echarts.init(document.getElementById('main'), null, {
