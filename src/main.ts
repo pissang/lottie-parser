@@ -400,7 +400,7 @@ function isBezier(k: any): k is Lottie.Bezier {
   return k && k.i && k.o && k.v;
 }
 function parseShapePaths(
-  shape: Lottie.PathShape,
+  shape: Pick<Lottie.PathShape, 'ks'>,
   animations: KeyframeAnimation[],
   context: ParseContext
 ) {
@@ -703,6 +703,7 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
         layerGroup = parseShapeLayer(layer as Lottie.ShapeLayer, context);
         break;
       case Lottie.LayerType.null:
+      case Lottie.LayerType.solid: // TODO
         layerGroup = {
           type: 'group',
           children: [],
@@ -730,17 +731,40 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
       if (layer.ind != null) {
         layerIndexMap[layer.ind] = layerGroup;
       }
-      elements.push(
-        Object.assign(createNewGroupForAnchor(layerGroup), {
-          extra: {
-            refId: (layer as Lottie.PrecompLayer).refId,
-            layerParent: layer.parent,
-            ip: layer.ip,
-            op: layer.op,
-            st: layer.st,
+
+      const finalLayerGroup = createNewGroupForAnchor(layerGroup);
+      finalLayerGroup.extra = {
+        refId: (layer as Lottie.PrecompLayer).refId,
+        layerParent: layer.parent,
+        ip: layer.ip,
+        op: layer.op,
+        st: layer.st,
+      };
+      // Masks
+      // TODO not support alpha and other modes.
+      if (layer.hasMask && layer.masksProperties?.length) {
+        const maskKeyframeAnimations: KeyframeAnimation[] = [];
+        // TODO Only support one mask now.
+        const attrs = parseShapePaths(
+          {
+            ks: layer.masksProperties[0].pt,
           },
-        })
-      );
+          maskKeyframeAnimations,
+          context
+        );
+
+        finalLayerGroup.clipPath = {
+          type: 'lottie-shape-path',
+          ...attrs,
+        };
+        // Must have fill
+        finalLayerGroup.clipPath!.style!.fill = '#000';
+        if (maskKeyframeAnimations.length) {
+          finalLayerGroup.clipPath!.keyframeAnimation = maskKeyframeAnimations;
+        }
+      }
+
+      elements.push(finalLayerGroup);
     }
   });
 

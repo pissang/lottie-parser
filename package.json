@@ -7,10 +7,9 @@
     "serve": "vite preview"
   },
   "devDependencies": {
-    "@apidevtools/json-schema-ref-parser": "^9.0.9",
     "@types/node": "^16.11.6",
     "echarts": "^5.2.2",
-    "json-schema-to-typescript": "^10.1.5",
+    "tweakpane": "^3.0.6",
     "typescript": "^4.3.2",
     "vite": "^2.6.4",
     "zrender": "^5.2.1"

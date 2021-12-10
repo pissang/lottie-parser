@@ -5,6 +5,7 @@ specifiers:
   '@types/node': ^16.11.6
   echarts: ^5.2.2
   json-schema-to-typescript: ^10.1.5
+  tweakpane: ^3.0.6
   typescript: ^4.3.2
   vite: ^2.6.4
   zrender: ^5.2.1
@@ -14,9 +15,10 @@ devDependencies:
   '@types/node': 16.11.6
   echarts: 5.2.2
   json-schema-to-typescript: 10.1.5
+  tweakpane: 3.0.6
   typescript: 4.4.4
   vite: 2.6.13
-  zrender: link:../zrender
+  zrender: 5.2.1
 
 packages:
 
@@ -581,6 +583,10 @@ packages:
 
   /tslib/2.3.0:
     resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+    dev: true
+
+  /tweakpane/3.0.6:
+    resolution: {integrity: sha512-LKl2Hau20bjslDQUB96GdNJLprwwEMkn/B/iN2XjWG+0iOvCBW4XiynTks+RUjU4bXhSI3VLBujKDIsuzDQg4g==}
     dev: true
 
   /type/1.2.0:
