@@ -21,7 +21,7 @@ function setAnimationToLoop(elements) {
   });
 }
 
-fetch('./data/failed-location-verification.json')
+fetch('./data/adrock.json')
   .then((response) => response.json())
   .then((data) => {
     const chart = echarts.init(document.getElementById('main'), null, {

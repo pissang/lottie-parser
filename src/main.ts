@@ -18,12 +18,17 @@ interface KeyframeAnimation {
   keyframes?: Record<string, any>[];
 }
 
-interface CustomElementOption extends ElementProps {
+interface CustomElementOption extends Omit<ElementProps, 'clipPath'> {
   type: string;
   anchorX?: number;
   anchorY?: number;
+
   keyframeAnimation?: KeyframeAnimation[];
   children?: CustomElementOption[];
+
+  shape?: Record<string, any>;
+  style?: Record<string, any>;
+  clipPath?: CustomElementOption;
 }
 
 class ParseContext {
@@ -31,10 +36,7 @@ class ParseContext {
   startFrame = 0;
   endFrame: number;
 
-  assetsLayersMap: Map<
-    string,
-    { asset: Lottie.PrecompAsset; elements: CustomElementOption[] }
-  > = new Map();
+  layer: Lottie.Layer;
 }
 
 function isNumberArray(val: any): val is number[] {
@@ -114,6 +116,7 @@ function parseKeyframe(
   setVal: (kfObj: any, val: any) => void
 ) {
   const kfsLen = kfs.length;
+  // const offset = context.layerStartTime;
   const duration = context.endFrame;
 
   let prevKf;
@@ -620,6 +623,10 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
     // Order is reversed
     shapes = shapes.slice().reverse();
     shapes.forEach((shape) => {
+      if (shape.hd) {
+        return;
+      }
+
       let ecEl;
       switch (shape.ty) {
         case Lottie.ShapeType.Group:
@@ -688,6 +695,8 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
   layers = layers.slice().reverse();
   const layerIndexMap: Record<number, CustomElementOption> = {};
   layers?.forEach((layer) => {
+    context.layer = layer;
+
     let layerGroup;
     switch (layer.ty) {
       case Lottie.LayerType.shape:
@@ -702,6 +711,7 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
       case Lottie.LayerType.precomp:
         layerGroup = {
           type: 'group',
+          children: [],
         };
         break;
     }
@@ -711,7 +721,7 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
       const attrs: Record<string, any> = {
         name: layer.nm,
       };
-      parseTransforms(layer.ks, attrs, keyframeAnimations, context);
+      layer.ks && parseTransforms(layer.ks, attrs, keyframeAnimations, context);
 
       if (keyframeAnimations.length) {
         layerGroup.keyframeAnimation = keyframeAnimations;
@@ -725,6 +735,9 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
           extra: {
             refId: (layer as Lottie.PrecompLayer).refId,
             layerParent: layer.parent,
+            ip: layer.ip,
+            op: layer.op,
+            st: layer.st,
           },
         })
       );
@@ -759,6 +772,11 @@ export function parse(data: Lottie.Animation) {
   context.endFrame = data.op;
 
   let allElements: CustomElementOption[] = [];
+  const assetsLayersMap: Map<
+    string,
+    { asset: Lottie.PrecompAsset; elements: CustomElementOption[] }
+  > = new Map();
+
   data.assets?.forEach((asset) => {
     if (isPrecompAsset(asset)) {
       const { elements, elementsFlat } = parseLayers(
@@ -768,7 +786,7 @@ export function parse(data: Lottie.Animation) {
 
       allElements = allElements.concat(elementsFlat);
 
-      context.assetsLayersMap.set(asset.id, {
+      assetsLayersMap.set(asset.id, {
         asset,
         elements,
       });
@@ -776,11 +794,45 @@ export function parse(data: Lottie.Animation) {
   });
 
   const { elements, elementsFlat } = parseLayers(data.layers || [], context);
-  [...allElements, ...elementsFlat].forEach((el) => {
-    const refId = el.extra?.refId as string;
-    const layer = context.assetsLayersMap.get(refId);
+  [...allElements, ...elementsFlat].forEach((el: CustomElementOption) => {
+    const extra = el.extra!;
+    // Built ref
+    const refId = extra.refId as string;
+    const layer = assetsLayersMap.get(refId);
     if (refId && layer) {
-      el.children = util.clone(layer.elements);
+      if (el.children![0]) {
+        el.children![0].children = util.clone(layer.elements);
+      } else {
+        el.children = util.clone(layer.elements);
+      }
+    }
+
+    // Update in and out animation.
+    const layerIp = extra.ip as number;
+    const layerOp = extra.op as number;
+
+    if (layerIp && layerOp && layerIp !== data.ip && layerOp !== data.op) {
+      const keyframeAnimation = {
+        duration: context.endFrame * context.frameTime,
+        keyframes: [
+          {
+            ignore: true,
+            percent: 0,
+          },
+          {
+            ignore: false,
+            percent: layerIp / context.endFrame,
+          },
+        ],
+      };
+      if (layerOp / context.endFrame < 1) {
+        keyframeAnimation.keyframes.push({
+          ignore: true,
+          percent: layerOp / context.endFrame,
+        });
+      }
+      el.keyframeAnimation = el.keyframeAnimation || [];
+      el.keyframeAnimation.push(keyframeAnimation);
     }
   });
 
