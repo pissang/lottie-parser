@@ -263,22 +263,32 @@ function parseTransforms(
   ks: Lottie.Transform,
   attrs: ElementProps,
   animations: KeyframeAnimation[],
-  context: ParseContext
+  context: ParseContext,
+  targetProp = '',
+  transformProps = {
+    x: 'x',
+    y: 'y',
+    rotation: 'rotation',
+    scaleX: 'scaleX',
+    scaleY: 'scaleY',
+    anchorX: 'anchorX',
+    anchorY: 'anchorY',
+  }
 ) {
   if ((ks.p as Lottie.Position).s) {
     parseValue(
       (ks.p as Lottie.Position).x,
       attrs,
-      '',
-      ['x'],
+      targetProp,
+      [transformProps.x],
       animations,
       context
     );
     parseValue(
       (ks.p as Lottie.Position).y,
       attrs,
-      '',
-      ['y'],
+      targetProp,
+      [transformProps.y],
       animations,
       context
     );
@@ -286,8 +296,8 @@ function parseTransforms(
     parseValue(
       ks.p as Lottie.MultiDimensional,
       attrs,
-      '',
-      ['x', 'y'],
+      targetProp,
+      [transformProps.x, transformProps.y],
       animations,
       context
     );
@@ -295,8 +305,8 @@ function parseTransforms(
   parseValue(
     ks.s,
     attrs,
-    '',
-    ['scaleX', 'scaleY'],
+    targetProp,
+    [transformProps.scaleX, transformProps.scaleY],
     animations,
     context,
     (val) => val / 100
@@ -304,14 +314,22 @@ function parseTransforms(
   parseValue(
     ks.r,
     attrs,
-    '',
-    ['rotation'],
+    targetProp,
+    [transformProps.rotation],
     animations,
     context,
     // zrender has inversed rotation
     (val) => -(val / 180) * Math.PI
   );
-  parseValue(ks.a, attrs, '', ['anchorX', 'anchorY'], animations, context);
+
+  parseValue(
+    ks.a,
+    attrs,
+    targetProp,
+    [transformProps.anchorX, transformProps.anchorY],
+    animations,
+    context
+  );
 
   // TODO opacity.
   // TODO sk: skew, sa: skew axis
@@ -617,9 +635,10 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
   }
 
   function parseIterations(shapes: Lottie.ShapeElement[]) {
-    const ecEls: any[] = [];
+    const ecEls: CustomElementOption[] = [];
     const attrs: Record<string, any> = {};
     const keyframeAnimations: KeyframeAnimation[] = [];
+
     // Order is reversed
     shapes = shapes.slice().reverse();
     shapes.forEach((shape) => {
@@ -658,6 +677,32 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
             attrs,
             keyframeAnimations,
             context
+          );
+          break;
+        case Lottie.ShapeType.Repeat:
+          parseValue(
+            (shape as Lottie.RepeatShape).c,
+            attrs,
+            'shape',
+            ['repeat'],
+            keyframeAnimations,
+            context
+          );
+          parseTransforms(
+            (shape as Lottie.RepeatShape).tr,
+            attrs,
+            keyframeAnimations,
+            context,
+            'shape',
+            {
+              x: 'repeatX',
+              y: 'repeatY',
+              rotation: 'repeatRot',
+              scaleX: 'repeatScaleX',
+              scaleY: 'repeatScaleY',
+              anchorX: 'repeatAnchorX',
+              anchorY: 'repeatAnchorY',
+            }
           );
           break;
         // TODO Multiple shapes.

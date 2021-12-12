@@ -27,7 +27,7 @@ const chart = echarts.init(document.getElementById('main'), null, {
 });
 
 const config = {
-  file: 'adrock.json',
+  file: 'kadokado-heart.json',
 };
 function displayLottie() {
   fetch(`./data/${config.file}`)

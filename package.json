@@ -11,7 +11,9 @@
     "echarts": "^5.2.2",
     "tweakpane": "^3.0.6",
     "typescript": "^4.3.2",
-    "vite": "^2.6.4",
+    "vite": "^2.6.4"
+  },
+  "dependencies": {
     "zrender": "^5.2.1"
   }
 }

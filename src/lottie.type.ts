@@ -505,6 +505,7 @@ export enum ShapeType {
   Stroke = 'st',
   Transform = 'tr',
   Path = 'sh',
+  Repeat = 'rp',
 }
 
 export type ShapeElement = {
@@ -661,6 +662,11 @@ export type TransformShape = ShapeElement & {
   sk: Value;
   /** Transform Skew Axis. */
   sa: Value;
+};
+
+export type RepeatShape = ShapeElement & {
+  c: Value;
+  tr: Transform;
 };
 
 export type Color4 = [number, number, number, number];
