@@ -117,7 +117,7 @@ function parseKeyframe(
 ) {
   const kfsLen = kfs.length;
   // const offset = context.layerStartTime;
-  const duration = context.endFrame;
+  const duration = context.endFrame - context.startFrame;
 
   let prevKf;
   for (let i = 0; i < kfsLen; i++) {
@@ -125,7 +125,7 @@ function parseKeyframe(
     const nextKf = kfs[i + 1];
     const isDiscrete = kf.h === 1;
     const outKeyframe: KeyframeAnimationKeyframe = {
-      percent: kf.t / duration,
+      percent: (kf.t + context.layer.st) / duration,
     };
     if (!isDiscrete) {
       outKeyframe.easing = getMultiDimensionEasingBezierString(
@@ -139,6 +139,7 @@ function parseKeyframe(
     if (startVal) {
       setVal(outKeyframe, startVal);
     }
+
     if (kf.t > 0 && i === 0) {
       // Set initial
       const initialKeyframe = {
@@ -155,7 +156,7 @@ function parseKeyframe(
     if (isDiscrete && nextKf) {
       // Use two keyframe to simulate the discrete animation.
       const extraKeyframe: KeyframeAnimationKeyframe = {
-        percent: nextKf.t / duration,
+        percent: (nextKf.t + context.layer.st) / duration,
       };
       setVal(extraKeyframe, startVal);
       out.keyframes!.push(extraKeyframe);
@@ -998,9 +999,14 @@ export function parse(data: Lottie.Animation) {
     const layerIp = extra.ip as number;
     const layerOp = extra.op as number;
 
-    if (layerIp && layerOp && layerIp !== data.ip && layerOp !== data.op) {
+    if (
+      layerIp != null &&
+      layerOp != null &&
+      (layerIp > data.ip || layerOp < data.op)
+    ) {
+      const duration = context.endFrame;
       const keyframeAnimation = {
-        duration: context.endFrame * context.frameTime,
+        duration: duration * context.frameTime,
         keyframes: [
           {
             ignore: true,
@@ -1008,14 +1014,14 @@ export function parse(data: Lottie.Animation) {
           },
           {
             ignore: false,
-            percent: layerIp / context.endFrame,
+            percent: layerIp / duration,
           },
         ],
       };
-      if (layerOp / context.endFrame < 1) {
+      if ((layerOp + (extra.st as number)) / duration < 1) {
         keyframeAnimation.keyframes.push({
           ignore: true,
-          percent: layerOp / context.endFrame,
+          percent: layerOp / duration,
         });
       }
       el.keyframeAnimation = el.keyframeAnimation || [];

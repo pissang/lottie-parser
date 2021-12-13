@@ -251,7 +251,7 @@ function buildCustomPath(
           const tmpX: number[] = [];
           const tmpY: number[] = [];
           if (t0 > 0) {
-            // trim start
+            // Trim start
             cubicSubdivide(x0, x1, x2, x3, t0, tmpX);
             cubicSubdivide(y0, y1, y2, y3, t0, tmpY);
             x0 = tmpX[4];
@@ -425,6 +425,8 @@ export function install(echarts: {
             ctx.arc(x + r, y + height - r, r, Math.PI / 2, Math.PI);
             ctx.lineTo(x, y + r);
             ctx.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5);
+
+            ctx.closePath();
           }
         },
         shape,
