@@ -695,6 +695,15 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
             modifiers.keyframeAnimations,
             context
           );
+          parseValue(
+            (shape as Lottie.TrimShape).e,
+            modifiers.attrs,
+            'shape',
+            ['trimEnd'],
+            modifiers.keyframeAnimations,
+            context
+          );
+          break;
       }
     });
   }

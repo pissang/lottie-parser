@@ -1,4 +1,4 @@
-import type { graphic } from 'echarts';
+import { graphic, number } from 'echarts';
 import { rotate } from 'zrender/lib/core/matrix';
 import { applyTransform } from 'zrender/lib/core/vector';
 import { cubicLength, cubicSubdivide } from 'zrender/lib/core/curve';
@@ -153,9 +153,21 @@ function buildCustomPath(
     v: number[][];
     close: boolean;
     trimStart: number;
+    trimEnd: number;
   },
   transform?: number[]
 ) {
+  let trimStart = shape.trimStart / 100;
+  let trimEnd = shape.trimEnd / 100;
+
+  if (trimStart === trimEnd) {
+    return;
+  }
+  if (trimStart > trimEnd) {
+    const tmp = trimStart;
+    trimStart = trimEnd;
+    trimEnd = tmp;
+  }
   let inPts: number[][];
   let outPts: number[][];
   let vPts: number[][];
@@ -173,9 +185,9 @@ function buildCustomPath(
     vPts = shape.v as number[][];
   }
 
-  let segLens: number[];
-  let totalLen = 0;
-  if (shape.trimStart > 0) {
+  if (trimStart > 0 || trimEnd < 1) {
+    let segLens: number[];
+    let totalLen = 0;
     segLens = (this as any)._segLens || ((this as any)._segLens = []);
     let idx = 0;
     eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
@@ -196,53 +208,108 @@ function buildCustomPath(
       segLens[idx] = len;
       totalLen += len;
     });
-  }
 
-  const trimedLen = (shape.trimStart / 100) * totalLen;
-  let segIdx = 0;
-  let currLen = 0;
-  eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
-    if (trimedLen > 0) {
+    const trimedStartLen = trimStart * totalLen;
+    const trimedEndLen = trimEnd * totalLen;
+    let currLen = 0;
+    let segIdx = 0;
+    eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
       const segLen = segLens[segIdx];
-      let segTrimedLen = trimedLen - currLen;
-      if (segTrimedLen >= segLen) {
+
+      // All trimed
+      if (currLen + segLen <= trimedStartLen || currLen >= trimedEndLen) {
         return;
-      } else if (segTrimedLen > 0) {
-        const t = segTrimedLen / segLen;
+      } else if (
+        // All not trimed
+        currLen >= trimedStartLen &&
+        currLen + segLen <= trimedEndLen
+      ) {
+        if (segIdx === 0) {
+          ctx.moveTo(pt0[0], pt0[1]);
+        }
         if (pt2 && pt3) {
-          const tmpX: number[] = [];
-          const tmpY: number[] = [];
-          cubicSubdivide(pt0[0], pt1[0], pt2[0], pt3[0], t, tmpX);
-          cubicSubdivide(pt0[1], pt1[1], pt2[1], pt3[1], t, tmpY);
-          ctx.moveTo(tmpX[4], tmpY[4]);
-          ctx.bezierCurveTo(
-            tmpX[5],
-            tmpY[5],
-            tmpX[6],
-            tmpY[6],
-            tmpX[7],
-            tmpY[7]
-          );
+          ctx.bezierCurveTo(pt1[0], pt1[1], pt2[0], pt2[1], pt3[0], pt3[1]);
         } else {
-          let x = (pt1[0] - pt0[0]) * t + pt0[0];
-          let y = (pt1[1] - pt0[1]) * t + pt0[1];
-          ctx.moveTo(x, y);
           ctx.lineTo(pt1[0], pt1[1]);
         }
+      } else {
+        const t0 = (trimedStartLen - currLen) / segLen;
+        const t1 = (trimedEndLen - currLen) / segLen;
+        if (t0 >= t1) {
+          return;
+        }
+        let x0 = pt0[0];
+        let y0 = pt0[1];
+        let x1 = pt1[0];
+        let y1 = pt1[1];
+        // Partially trimmed
+        if (pt2 && pt3) {
+          let x2 = pt2[0];
+          let y2 = pt2[1];
+          let x3 = pt3[0];
+          let y3 = pt3[1];
+          const tmpX: number[] = [];
+          const tmpY: number[] = [];
+          if (t0 > 0) {
+            // trim start
+            cubicSubdivide(x0, x1, x2, x3, t0, tmpX);
+            cubicSubdivide(y0, y1, y2, y3, t1, tmpY);
+            x0 = tmpX[4];
+            y0 = tmpY[4];
+            x1 = tmpX[5];
+            y1 = tmpY[5];
+            x2 = tmpX[6];
+            y2 = tmpY[6];
+            x3 = tmpX[7];
+            y3 = tmpY[7];
+          }
+          if (t1 < 1) {
+            // Trim end
+            cubicSubdivide(x0, x1, x2, x3, t0, tmpX);
+            cubicSubdivide(y0, y1, y2, y3, t1, tmpY);
+            x0 = tmpX[0];
+            y0 = tmpY[0];
+            x1 = tmpX[1];
+            y1 = tmpY[1];
+            x2 = tmpX[2];
+            y2 = tmpY[2];
+            x3 = tmpX[3];
+            y3 = tmpY[3];
+          }
+
+          ctx.moveTo(x0, y0);
+          ctx.bezierCurveTo(x1, y1, x2, y2, x3, y3);
+        } else {
+          if (t0 > 0) {
+            x0 = (x1 - x0) * t0 + x0;
+            y0 = (y1 - y0) * t0 + y0;
+          }
+          if (t1 < 1) {
+            x1 = (x1 - x0) * t1 + x0;
+            y1 = (y1 - y0) * t1 + y0;
+          }
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+        }
       }
+
       currLen += segLen;
-    } else {
-      if (segIdx === 0) {
+      segIdx++;
+    });
+  } else {
+    let isFirst = true;
+    eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
+      if (isFirst) {
         ctx.moveTo(pt0[0], pt0[1]);
       }
-    }
-    if (pt2 && pt3) {
-      ctx.bezierCurveTo(pt1[0], pt1[1], pt2[0], pt2[1], pt3[0], pt3[1]);
-    } else {
-      ctx.lineTo(pt1[0], pt1[1]);
-    }
-    segIdx++;
-  });
+      if (pt2 && pt3) {
+        ctx.bezierCurveTo(pt1[0], pt1[1], pt2[0], pt2[1], pt3[0], pt3[1]);
+      } else {
+        ctx.lineTo(pt1[0], pt1[1]);
+      }
+      isFirst = false;
+    });
+  }
 
   if (shape.close) {
     ctx.closePath();
@@ -260,12 +327,10 @@ export function install(echarts: {
       v: [] as number[][],
       close: false,
       trimStart: 0,
+      trimEnd: 100,
       ...defaultShapeRepeat,
     },
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
-      if (shape.trimStart === 100) {
-        return;
-      }
       withRepeat(
         (ctx, shape, transform) => {
           buildCustomPath.call(this, ctx, shape, transform);
