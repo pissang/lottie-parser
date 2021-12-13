@@ -127,7 +127,10 @@ function parseKeyframe(
     const nextKf = kfs[i + 1];
     const isDiscrete = kf.h === 1;
     const outKeyframe: KeyframeAnimationKeyframe = {
-      percent: (kf.t + context.layerSt - context.startFrame) / duration,
+      percent: Math.max(
+        (kf.t + context.layerSt - context.startFrame) / duration,
+        0
+      ),
     };
     if (!isDiscrete) {
       outKeyframe.easing = getMultiDimensionEasingBezierString(
@@ -158,7 +161,10 @@ function parseKeyframe(
     if (isDiscrete && nextKf) {
       // Use two keyframe to simulate the discrete animation.
       const extraKeyframe: KeyframeAnimationKeyframe = {
-        percent: (nextKf.t + context.layerSt - context.startFrame) / duration,
+        percent: Math.max(
+          (nextKf.t + context.layerSt - context.startFrame) / duration,
+          0
+        ),
       };
       setVal(extraKeyframe, startVal);
       out.keyframes!.push(extraKeyframe);

@@ -24,7 +24,7 @@ function setAnimationToLoop(elements) {
 }
 
 const config = {
-  file: 'failed-location-verification.json',
+  file: 'preloader.json',
   renderer: 'svg' as 'svg' | 'canvas',
 };
 let chart = echarts.init(document.getElementById('chart'), null, {
@@ -89,6 +89,7 @@ pane
       'cat-loader.json',
       'multiple-spinning-dotted-rings-loading.json',
       'spooky-ghost.json',
+      'preloader.json',
       'echarts-www/bg.json',
       'echarts-www/analysis.json',
       'echarts-www/chart.json',
