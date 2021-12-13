@@ -253,7 +253,7 @@ function buildCustomPath(
           if (t0 > 0) {
             // trim start
             cubicSubdivide(x0, x1, x2, x3, t0, tmpX);
-            cubicSubdivide(y0, y1, y2, y3, t1, tmpY);
+            cubicSubdivide(y0, y1, y2, y3, t0, tmpY);
             x0 = tmpX[4];
             y0 = tmpY[4];
             x1 = tmpX[5];
@@ -265,7 +265,7 @@ function buildCustomPath(
           }
           if (t1 < 1) {
             // Trim end
-            cubicSubdivide(x0, x1, x2, x3, t0, tmpX);
+            cubicSubdivide(x0, x1, x2, x3, t1, tmpX);
             cubicSubdivide(y0, y1, y2, y3, t1, tmpY);
             x0 = tmpX[0];
             y0 = tmpY[0];
