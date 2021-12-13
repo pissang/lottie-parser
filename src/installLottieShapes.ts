@@ -1,6 +1,7 @@
 import type { graphic } from 'echarts';
 import { rotate } from 'zrender/lib/core/matrix';
 import { applyTransform } from 'zrender/lib/core/vector';
+import { cubicLength, cubicSubdivide } from 'zrender/lib/core/curve';
 
 function isAroundEqual(a: number[], b: number[]) {
   return Math.abs(a[0] - b[0]) < 1e-8 && Math.abs(a[1] - b[1]) < 1e-8;
@@ -102,6 +103,152 @@ function withRepeat(
   }
 }
 
+function eachSegment(
+  inPts: number[][],
+  outPts: number[][],
+  vPts: number[][],
+  close: boolean,
+  drawSeg: (
+    pt0: number[],
+    pt1: number[],
+    pt2?: number[],
+    pt3?: number[]
+  ) => void
+) {
+  const len = vPts.length;
+  if (!len) {
+    return;
+  }
+
+  for (let i = 1; i < vPts.length; i++) {
+    const prev = i - 1;
+    if (
+      !isAroundEqual(outPts[prev], vPts[prev]) ||
+      !isAroundEqual(inPts[i], vPts[i])
+    ) {
+      drawSeg(vPts[prev], outPts[prev], inPts[i], vPts[i]);
+    } else {
+      drawSeg(vPts[prev], vPts[i]);
+    }
+  }
+  if (close) {
+    const last = len - 1;
+    if (
+      !isAroundEqual(outPts[last], vPts[last]) ||
+      !isAroundEqual(inPts[0], vPts[0])
+    ) {
+      drawSeg(vPts[last], outPts[last], inPts[0], vPts[0]);
+    } else {
+      drawSeg(vPts[last], vPts[0]);
+    }
+  }
+}
+
+function buildCustomPath(
+  this: any,
+  ctx: CanvasRenderingContext2D,
+  shape: {
+    in: number[][];
+    out: number[][];
+    v: number[][];
+    close: boolean;
+    trimStart: number;
+  },
+  transform?: number[]
+) {
+  let inPts: number[][];
+  let outPts: number[][];
+  let vPts: number[][];
+  if (transform) {
+    inPts = (this as any)._inPts || ((this as any)._inPts = []);
+    outPts = (this as any)._outPts || ((this as any)._outPts = []);
+    vPts = (this as any)._vPts || ((this as any)._vPts = []);
+
+    transformPts(inPts, shape.in, transform);
+    transformPts(outPts, shape.out, transform);
+    transformPts(vPts, shape.v, transform);
+  } else {
+    inPts = shape.in as number[][];
+    outPts = shape.out as number[][];
+    vPts = shape.v as number[][];
+  }
+
+  let segLens: number[];
+  let totalLen = 0;
+  if (shape.trimStart > 0) {
+    segLens = (this as any)._segLens || ((this as any)._segLens = []);
+    let idx = 0;
+    eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
+      const len =
+        pt2 && pt3
+          ? cubicLength(
+              pt0[0],
+              pt0[1],
+              pt1[0],
+              pt1[1],
+              pt2[0],
+              pt2[1],
+              pt3[0],
+              pt3[1],
+              10
+            )
+          : Math.sqrt((pt0[0] - pt1[0]) ** 2 + (pt0[1] - pt1[1]) ** 2);
+      segLens[idx] = len;
+      totalLen += len;
+    });
+  }
+
+  const trimedLen = (shape.trimStart / 100) * totalLen;
+  let segIdx = 0;
+  let currLen = 0;
+  eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
+    if (trimedLen > 0) {
+      const segLen = segLens[segIdx];
+      let segTrimedLen = trimedLen - currLen;
+      if (segTrimedLen >= segLen) {
+        return;
+      } else if (segTrimedLen > 0) {
+        const t = segTrimedLen / segLen;
+        if (pt2 && pt3) {
+          const tmpX: number[] = [];
+          const tmpY: number[] = [];
+          cubicSubdivide(pt0[0], pt1[0], pt2[0], pt3[0], t, tmpX);
+          cubicSubdivide(pt0[1], pt1[1], pt2[1], pt3[1], t, tmpY);
+          ctx.moveTo(tmpX[4], tmpY[4]);
+          ctx.bezierCurveTo(
+            tmpX[5],
+            tmpY[5],
+            tmpX[6],
+            tmpY[6],
+            tmpX[7],
+            tmpY[7]
+          );
+        } else {
+          let x = (pt1[0] - pt0[0]) * t + pt0[0];
+          let y = (pt1[1] - pt0[1]) * t + pt0[1];
+          ctx.moveTo(x, y);
+          ctx.lineTo(pt1[0], pt1[1]);
+        }
+      }
+      currLen += segLen;
+    } else {
+      if (segIdx === 0) {
+        ctx.moveTo(pt0[0], pt0[1]);
+      }
+    }
+    if (pt2 && pt3) {
+      ctx.bezierCurveTo(pt1[0], pt1[1], pt2[0], pt2[1], pt3[0], pt3[1]);
+    } else {
+      ctx.lineTo(pt1[0], pt1[1]);
+    }
+    segIdx++;
+  });
+
+  if (shape.close) {
+    ctx.closePath();
+  }
+}
+
 export function install(echarts: {
   graphic: Pick<typeof graphic, 'registerShape' | 'extendShape'>;
 }) {
@@ -112,72 +259,16 @@ export function install(echarts: {
       out: [] as number[][],
       v: [] as number[][],
       close: false,
-      trim: 0,
+      trimStart: 0,
       ...defaultShapeRepeat,
     },
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
+      if (shape.trimStart === 100) {
+        return;
+      }
       withRepeat(
         (ctx, shape, transform) => {
-          let inPts: number[][];
-          let outPts: number[][];
-          let vPts: number[][];
-
-          if (transform) {
-            inPts = (this as any)._inPts || ((this as any)._inPts = []);
-            outPts = (this as any)._outPts || ((this as any)._outPts = []);
-            vPts = (this as any)._vPts || ((this as any)._vPts = []);
-
-            transformPts(inPts, shape.in, transform);
-            transformPts(outPts, shape.out, transform);
-            transformPts(vPts, shape.v, transform);
-          } else {
-            inPts = shape.in as number[][];
-            outPts = shape.out as number[][];
-            vPts = shape.v as number[][];
-          }
-
-          const len = vPts.length;
-          if (!len) {
-            return;
-          }
-          ctx.moveTo(vPts[0][0], vPts[0][1]);
-          for (let i = 1; i < len; i++) {
-            const prev = i - 1;
-            if (
-              !isAroundEqual(outPts[prev], vPts[prev]) ||
-              !isAroundEqual(inPts[i], vPts[i])
-            ) {
-              ctx.bezierCurveTo(
-                outPts[prev][0],
-                outPts[prev][1],
-                inPts[i][0],
-                inPts[i][1],
-                vPts[i][0],
-                vPts[i][1]
-              );
-            } else {
-              ctx.lineTo(vPts[i][0], vPts[i][1]);
-            }
-          }
-
-          if (shape.close) {
-            const last = len - 1;
-            if (
-              !isAroundEqual(outPts[last], vPts[last]) ||
-              !isAroundEqual(inPts[0], vPts[0])
-            ) {
-              ctx.bezierCurveTo(
-                outPts[last][0],
-                outPts[last][1],
-                inPts[0][0],
-                inPts[0][1],
-                vPts[0][0],
-                vPts[0][1]
-              );
-            } else {
-              ctx.closePath();
-            }
-          }
+          buildCustomPath.call(this, ctx, shape, transform);
         },
         shape,
         ctx
@@ -197,6 +288,7 @@ export function install(echarts: {
     },
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
       withRepeat(
+        // TODO trim, transform repeat
         (ctx, shape, transform) => {
           let x = shape.cx;
           let y = shape.cy;
@@ -238,6 +330,7 @@ export function install(echarts: {
     },
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
       withRepeat(
+        // TODO trim, transform repeat
         (ctx, shape, transform) => {
           let width = shape.width;
           let height = shape.height;

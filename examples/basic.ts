@@ -1,5 +1,6 @@
 import * as lottieParser from '../src/main';
 import * as echarts from 'echarts';
+import lottie from 'lottie-web';
 import { Pane } from 'tweakpane';
 
 lottieParser.install(echarts);
@@ -22,26 +23,46 @@ function setAnimationToLoop(elements) {
   });
 }
 
-const chart = echarts.init(document.getElementById('main'), null, {
+const chart = echarts.init(document.getElementById('chart'), null, {
   renderer: 'svg',
 });
 
 const config = {
   file: 'kadokado-heart.json',
 };
+
 function displayLottie() {
   fetch(`./data/${config.file}`)
     .then((response) => response.json())
     .then((data) => {
+      lottie.destroy();
+      // Reference
+      lottie.loadAnimation({
+        container: document.querySelector('#reference'), // the dom element that will contain the animation
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        animationData: JSON.parse(JSON.stringify(data)),
+      });
+
       const result = lottieParser.parse(data);
 
       setAnimationToLoop(result.elements);
+
+      const scale = Math.min(400 / result.width, 400 / result.height);
 
       chart.setOption(
         {
           // backgroundColor: 'black',
           graphic: {
-            elements: result.elements,
+            elements: [
+              {
+                type: 'group',
+                scaleX: scale,
+                scaleY: scale,
+                children: result.elements,
+              },
+            ],
           },
         },
         true
@@ -65,6 +86,7 @@ pane
       'liquid-blobby-loader-green.json': 'liquid-blobby-loader-green.json',
       'pin-location.json': 'pin-location.json',
       'rocket.json': 'rocket.json',
+      'cat-loader.json': 'cat-loader.json',
       'echarts-www/bg.json': 'echarts-www/bg.json',
       'echarts-www/analysis.json': 'echarts-www/analysis.json',
       'echarts-www/chart.json': 'echarts-www/chart.json',

@@ -123,15 +123,17 @@ function parseKeyframe(
   for (let i = 0; i < kfsLen; i++) {
     const kf = kfs[i];
     const nextKf = kfs[i + 1];
+    const isDiscrete = kf.h === 1;
     const outKeyframe: KeyframeAnimationKeyframe = {
-      // Only use the first easing. TODO: Different easing?
-      easing: getMultiDimensionEasingBezierString(
+      percent: kf.t / duration,
+    };
+    if (!isDiscrete) {
+      outKeyframe.easing = getMultiDimensionEasingBezierString(
         kf,
         nextKf,
         bezierEasingDimIndex
-      ),
-      percent: kf.t / duration,
-    };
+      );
+    }
     // Use end state of laster frame if start state not exits.
     const startVal = kf.s || prevKf?.e;
     if (startVal) {
@@ -147,9 +149,21 @@ function parseKeyframe(
       }
       out.keyframes!.push(initialKeyframe);
     }
+
     out.keyframes!.push(outKeyframe);
+
+    if (isDiscrete && nextKf) {
+      // Use two keyframe to simulate the discrete animation.
+      const extraKeyframe: KeyframeAnimationKeyframe = {
+        percent: nextKf.t / duration,
+      };
+      setVal(extraKeyframe, startVal);
+      out.keyframes!.push(extraKeyframe);
+    }
+
     prevKf = kf;
   }
+
   if (kfsLen) {
     out.duration = context.frameTime * duration;
   }
@@ -634,13 +648,74 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
     return ecEl;
   }
 
-  function parseIterations(shapes: Lottie.ShapeElement[]) {
+  function parseModifiers(
+    shapes: Lottie.ShapeElement[],
+    modifiers: {
+      attrs: Record<string, any>;
+      keyframeAnimations: KeyframeAnimation[];
+    }
+  ) {
+    shapes.forEach((shape) => {
+      if (shape.hd) {
+        return;
+      }
+      switch (shape.ty) {
+        case Lottie.ShapeType.Repeat:
+          parseValue(
+            (shape as Lottie.RepeatShape).c,
+            modifiers.attrs,
+            'shape',
+            ['repeat'],
+            modifiers.keyframeAnimations,
+            context
+          );
+          parseTransforms(
+            (shape as Lottie.RepeatShape).tr,
+            modifiers.attrs,
+            modifiers.keyframeAnimations,
+            context,
+            'shape',
+            {
+              x: 'repeatX',
+              y: 'repeatY',
+              rotation: 'repeatRot',
+              scaleX: 'repeatScaleX',
+              scaleY: 'repeatScaleY',
+              anchorX: 'repeatAnchorX',
+              anchorY: 'repeatAnchorY',
+            }
+          );
+          break;
+        case Lottie.ShapeType.Trim:
+          parseValue(
+            (shape as Lottie.TrimShape).s,
+            modifiers.attrs,
+            'shape',
+            ['trimStart'],
+            modifiers.keyframeAnimations,
+            context
+          );
+      }
+    });
+  }
+
+  function parseIterations(
+    shapes: Lottie.ShapeElement[],
+    modifiers: {
+      attrs: Record<string, any>;
+      keyframeAnimations: KeyframeAnimation[];
+    }
+  ) {
     const ecEls: CustomElementOption[] = [];
     const attrs: Record<string, any> = {};
     const keyframeAnimations: KeyframeAnimation[] = [];
 
     // Order is reversed
     shapes = shapes.slice().reverse();
+
+    // Modifiers first:
+    parseModifiers(shapes, modifiers);
+
     shapes.forEach((shape) => {
       if (shape.hd) {
         return;
@@ -651,7 +726,11 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
         case Lottie.ShapeType.Group:
           ecEl = {
             type: 'group',
-            children: parseIterations((shape as Lottie.GroupShapeElement).it),
+            children: parseIterations(
+              (shape as Lottie.GroupShapeElement).it,
+              // Modifiers will be applied to all childrens.
+              modifiers
+            ),
           };
           break;
         // TODO Multiple fill and stroke
@@ -679,32 +758,6 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
             context
           );
           break;
-        case Lottie.ShapeType.Repeat:
-          parseValue(
-            (shape as Lottie.RepeatShape).c,
-            attrs,
-            'shape',
-            ['repeat'],
-            keyframeAnimations,
-            context
-          );
-          parseTransforms(
-            (shape as Lottie.RepeatShape).tr,
-            attrs,
-            keyframeAnimations,
-            context,
-            'shape',
-            {
-              x: 'repeatX',
-              y: 'repeatY',
-              rotation: 'repeatRot',
-              scaleX: 'repeatScaleX',
-              scaleY: 'repeatScaleY',
-              anchorX: 'repeatAnchorX',
-              anchorY: 'repeatAnchorY',
-            }
-          );
-          break;
         // TODO Multiple shapes.
         default:
           ecEl = tryCreateShape(shape, keyframeAnimations);
@@ -716,9 +769,14 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
     });
 
     ecEls.forEach((el, idx) => {
+      // Apply modifiers first
+      util.merge(el, modifiers.attrs, true);
       util.merge(el, attrs, true);
-      if (keyframeAnimations.length) {
-        el.keyframeAnimation = keyframeAnimations;
+      if (keyframeAnimations.length || modifiers.keyframeAnimations.length) {
+        el.keyframeAnimation = [
+          ...modifiers.keyframeAnimations,
+          ...keyframeAnimations,
+        ];
       }
 
       ecEls[idx] = createNewGroupForAnchor(el);
@@ -728,7 +786,10 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
 
   const layerGroup: CustomElementOption = {
     type: 'group',
-    children: parseIterations(layer.shapes),
+    children: parseIterations(layer.shapes, {
+      attrs: {},
+      keyframeAnimations: [],
+    }),
   };
   return createNewGroupForAnchor(layerGroup);
 }

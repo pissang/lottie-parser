@@ -506,6 +506,7 @@ export enum ShapeType {
   Transform = 'tr',
   Path = 'sh',
   Repeat = 'rp',
+  Trim = 'tm',
 }
 
 export type ShapeElement = {
@@ -669,6 +670,11 @@ export type RepeatShape = ShapeElement & {
   tr: Transform;
 };
 
+export type TrimShape = ShapeElement & {
+  s: Value;
+  e: Value;
+  o: Value;
+};
 export type Color4 = [number, number, number, number];
 
 export type ColorValue = {
