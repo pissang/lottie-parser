@@ -794,6 +794,52 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
   return createNewGroupForAnchor(layerGroup);
 }
 
+function traverse(
+  el: CustomElementOption,
+  cb: (el: CustomElementOption) => void
+) {
+  cb(el);
+  if (el.type === 'group') {
+    el.children?.forEach((child) => {
+      traverse(child, cb);
+    });
+  }
+}
+
+function addLayerOpacity(
+  layer: Lottie.Layer,
+  layerGroup: CustomElementOption,
+  context: ParseContext
+) {
+  const opacityAttrs = {} as CustomElementOption;
+  const opacityAnimations: KeyframeAnimation[] = [];
+
+  if (layer.ks?.o) {
+    parseValue(
+      layer.ks.o,
+      opacityAttrs,
+      'style',
+      ['opacity'],
+      opacityAnimations,
+      context,
+      (val) => val / 100
+    );
+
+    if (opacityAttrs.style?.opacity || opacityAnimations.length) {
+      traverse(layerGroup, (el) => {
+        if (el.type !== 'group' && el.style) {
+          Object.assign(el.style, opacityAttrs.style);
+          if (opacityAnimations.length) {
+            el.keyframeAnimation = (el.keyframeAnimation || []).concat(
+              opacityAnimations
+            );
+          }
+        }
+      });
+    }
+  }
+}
+
 function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
   let elements: CustomElementOption[] = [];
 
@@ -869,6 +915,8 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
           finalLayerGroup.clipPath!.keyframeAnimation = maskKeyframeAnimations;
         }
       }
+
+      addLayerOpacity(layer, finalLayerGroup, context);
 
       elements.push(finalLayerGroup);
     }
