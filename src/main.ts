@@ -36,7 +36,9 @@ class ParseContext {
   startFrame = 0;
   endFrame: number;
 
-  layer: Lottie.Layer;
+  assetsMap: Map<string, Lottie.Asset> = new Map();
+
+  layerSt: number;
 }
 
 function isNumberArray(val: any): val is number[] {
@@ -125,7 +127,7 @@ function parseKeyframe(
     const nextKf = kfs[i + 1];
     const isDiscrete = kf.h === 1;
     const outKeyframe: KeyframeAnimationKeyframe = {
-      percent: (kf.t + context.layer.st) / duration,
+      percent: (kf.t + context.layerSt - context.startFrame) / duration,
     };
     if (!isDiscrete) {
       outKeyframe.easing = getMultiDimensionEasingBezierString(
@@ -140,7 +142,7 @@ function parseKeyframe(
       setVal(outKeyframe, startVal);
     }
 
-    if (kf.t > 0 && i === 0) {
+    if (outKeyframe.percent > 0 && i === 0) {
       // Set initial
       const initialKeyframe = {
         percent: 0,
@@ -156,7 +158,7 @@ function parseKeyframe(
     if (isDiscrete && nextKf) {
       // Use two keyframe to simulate the discrete animation.
       const extraKeyframe: KeyframeAnimationKeyframe = {
-        percent: (nextKf.t + context.layer.st) / duration,
+        percent: (nextKf.t + context.layerSt - context.startFrame) / duration,
       };
       setVal(extraKeyframe, startVal);
       out.keyframes!.push(extraKeyframe);
@@ -850,14 +852,25 @@ function addLayerOpacity(
   }
 }
 
-function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
+function parseLayers(
+  layers: Lottie.Layer[],
+  context: ParseContext,
+  precompLayerTl?: {
+    ip: number;
+    op: number;
+    st: number;
+  }
+) {
   let elements: CustomElementOption[] = [];
 
   // Order is reversed
   layers = layers.slice().reverse();
   const layerIndexMap: Record<number, CustomElementOption> = {};
   layers?.forEach((layer) => {
-    context.layer = layer;
+    // Use the ip, op, st of ref from.
+    const layerIp = precompLayerTl ? precompLayerTl.ip : layer.ip;
+    const layerOp = precompLayerTl ? precompLayerTl.op : layer.op;
+    const layerSt = (context.layerSt = (precompLayerTl?.st || 0) + layer.st);
 
     let layerGroup;
     switch (layer.ty) {
@@ -874,7 +887,19 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
       case Lottie.LayerType.precomp:
         layerGroup = {
           type: 'group',
-          children: [],
+          children: parseLayers(
+            (
+              context.assetsMap.get(
+                (layer as Lottie.PrecompLayer).refId
+              ) as Lottie.PrecompAsset
+            )?.layers || [],
+            context,
+            {
+              ip: layer.ip,
+              op: layer.op,
+              st: layerSt,
+            }
+          ),
         };
         break;
     }
@@ -896,11 +921,7 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
 
       const finalLayerGroup = createNewGroupForAnchor(layerGroup);
       finalLayerGroup.extra = {
-        refId: (layer as Lottie.PrecompLayer).refId,
         layerParent: layer.parent,
-        ip: layer.ip,
-        op: layer.op,
-        st: layer.st,
       };
       // Masks
       // TODO not support alpha and other modes.
@@ -928,27 +949,51 @@ function parseLayers(layers: Lottie.Layer[], context: ParseContext) {
 
       addLayerOpacity(layer, finalLayerGroup, context);
 
+      // Update in and out animation.
+      if (
+        layerIp != null &&
+        layerOp != null &&
+        (layerIp > context.startFrame || layerOp < context.endFrame)
+      ) {
+        const duration = context.endFrame - context.startFrame;
+        const keyframeAnimation = {
+          duration: duration * context.frameTime,
+          keyframes: [
+            {
+              ignore: true,
+              percent: 0,
+            },
+            {
+              ignore: false,
+              percent: (layerIp - context.startFrame) / duration,
+            },
+          ],
+        };
+        if ((layerOp - context.startFrame) / duration < 1) {
+          keyframeAnimation.keyframes.push({
+            ignore: true,
+            percent: (layerOp - context.startFrame) / duration,
+          });
+        }
+        finalLayerGroup.keyframeAnimation =
+          finalLayerGroup.keyframeAnimation || [];
+        finalLayerGroup.keyframeAnimation.push(keyframeAnimation);
+      }
+
       elements.push(finalLayerGroup);
     }
   });
 
-  return {
-    // Build hierarchy
-    elements: elements.filter((el) => {
-      const parentLayer = layerIndexMap[el.extra?.layerParent as any];
-      if (parentLayer) {
-        // Has anchor
-        parentLayer.children?.push(el);
-        return false;
-      }
-      return true;
-    }),
-    elementsFlat: elements,
-  };
-}
-
-function isPrecompAsset(asset: Lottie.Asset): asset is Lottie.PrecompAsset {
-  return Array.isArray((asset as Lottie.PrecompAsset).layers);
+  // Build hierarchy
+  return elements.filter((el) => {
+    const parentLayer = layerIndexMap[el.extra?.layerParent as any];
+    if (parentLayer) {
+      // Has anchor
+      parentLayer.children?.push(el);
+      return false;
+    }
+    return true;
+  });
 }
 
 export function parse(data: Lottie.Animation) {
@@ -959,75 +1004,11 @@ export function parse(data: Lottie.Animation) {
   context.startFrame = data.ip;
   context.endFrame = data.op;
 
-  let allElements: CustomElementOption[] = [];
-  const assetsLayersMap: Map<
-    string,
-    { asset: Lottie.PrecompAsset; elements: CustomElementOption[] }
-  > = new Map();
-
   data.assets?.forEach((asset) => {
-    if (isPrecompAsset(asset)) {
-      const { elements, elementsFlat } = parseLayers(
-        (asset as Lottie.PrecompAsset).layers,
-        context
-      );
-
-      allElements = allElements.concat(elementsFlat);
-
-      assetsLayersMap.set(asset.id, {
-        asset,
-        elements,
-      });
-    }
+    context.assetsMap.set(asset.id, asset);
   });
 
-  const { elements, elementsFlat } = parseLayers(data.layers || [], context);
-  [...allElements, ...elementsFlat].forEach((el: CustomElementOption) => {
-    const extra = el.extra!;
-    // Built ref
-    const refId = extra.refId as string;
-    const layer = assetsLayersMap.get(refId);
-    if (refId && layer) {
-      if (el.children![0]) {
-        el.children![0].children = util.clone(layer.elements);
-      } else {
-        el.children = util.clone(layer.elements);
-      }
-    }
-
-    // Update in and out animation.
-    const layerIp = extra.ip as number;
-    const layerOp = extra.op as number;
-
-    if (
-      layerIp != null &&
-      layerOp != null &&
-      (layerIp > data.ip || layerOp < data.op)
-    ) {
-      const duration = context.endFrame;
-      const keyframeAnimation = {
-        duration: duration * context.frameTime,
-        keyframes: [
-          {
-            ignore: true,
-            percent: 0,
-          },
-          {
-            ignore: false,
-            percent: layerIp / duration,
-          },
-        ],
-      };
-      if ((layerOp + (extra.st as number)) / duration < 1) {
-        keyframeAnimation.keyframes.push({
-          ignore: true,
-          percent: layerOp / duration,
-        });
-      }
-      el.keyframeAnimation = el.keyframeAnimation || [];
-      el.keyframeAnimation.push(keyframeAnimation);
-    }
-  });
+  const elements = parseLayers(data.layers || [], context);
 
   return {
     width: data.w,
