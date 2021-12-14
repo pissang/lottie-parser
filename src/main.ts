@@ -1,5 +1,5 @@
 import * as Lottie from './lottie.type';
-import type { ElementProps, PathProps, RectProps } from 'zrender';
+import { ElementProps, PathProps, RectProps, vector } from 'zrender';
 import { util } from 'zrender';
 import { install } from './installLottieShapes';
 // @ts-ignore
@@ -359,18 +359,73 @@ function parseTransforms(
   // TODO px, py
 }
 
+function isGradientFillOrStroke(
+  fl: any
+): fl is Lottie.GradientFillShape | Lottie.GradientStrokeShape {
+  return fl.g && fl.s && fl.e;
+}
+
+function convertColorStops(arr: number[], count: number) {
+  const colorStops = [];
+  for (let i = 0; i < count * 4; ) {
+    const offset = arr[i++];
+    const r = Math.round(arr[i++] * 255);
+    const g = Math.round(arr[i++] * 255);
+    const b = Math.round(arr[i++] * 255);
+    colorStops.push({
+      offset,
+      color: `rgb(${r}, ${g}, ${b})`,
+    });
+  }
+  return colorStops;
+}
+
+function parseGradient(
+  shape: Lottie.GradientFillShape | Lottie.GradientStrokeShape
+) {
+  // TODO animation
+  const colorArr = shape.g.k.k as number[];
+  const colorStops = convertColorStops(colorArr, shape.g.p);
+  if (shape.t === Lottie.GradientType.Linear) {
+    return {
+      type: 'linear' as const,
+      colorStops,
+      x: shape.s.k[0] as number,
+      y: shape.s.k[1] as number,
+      x2: shape.e.k[0] as number,
+      y2: shape.e.k[1] as number,
+      global: true,
+    };
+  } else if (shape.t === Lottie.GradientType.Radial) {
+    return {
+      type: 'radial' as const,
+      colorStops,
+      x: shape.s.k[0] as number,
+      y: shape.s.k[1] as number,
+      r: vector.dist(shape.e.k as number[], shape.s.k as number[]),
+      global: true,
+    };
+  } else {
+    // Invalid gradient
+    return '#000';
+  }
+}
 function parseFill(
-  fl: Lottie.FillShape,
+  fl: Lottie.FillShape | Lottie.GradientFillShape,
   attrs: PathProps,
   animations: KeyframeAnimation[],
   context: ParseContext
 ) {
   attrs.style = attrs.style || {};
   // Color
-  if (isMultiDimensionalValue(fl.c)) {
-    attrs.style.fill = toColorString(fl.c.k);
-  } else if (isMultiDimensionalKeyframedValue(fl.c)) {
-    parseColorOffsetKeyframe(fl.c.k, 'style', 'fill', animations, context);
+  if (isGradientFillOrStroke(fl)) {
+    attrs.style.fill = parseGradient(fl);
+  } else {
+    if (isMultiDimensionalValue(fl.c)) {
+      attrs.style.fill = toColorString(fl.c.k);
+    } else if (isMultiDimensionalKeyframedValue(fl.c)) {
+      parseColorOffsetKeyframe(fl.c.k, 'style', 'fill', animations, context);
+    }
   }
 
   // Opacity
@@ -393,10 +448,14 @@ function parseStroke(
 ) {
   attrs.style = attrs.style || {};
   // Color
-  if (isMultiDimensionalValue(st.c)) {
-    attrs.style.stroke = toColorString(st.c.k);
-  } else if (isMultiDimensionalKeyframedValue(st.c)) {
-    parseColorOffsetKeyframe(st.c.k, 'style', 'stroke', animations, context);
+  if (isGradientFillOrStroke(st)) {
+    attrs.style.stroke = parseGradient(st);
+  } else {
+    if (isMultiDimensionalValue(st.c)) {
+      attrs.style.stroke = toColorString(st.c.k);
+    } else if (isMultiDimensionalKeyframedValue(st.c)) {
+      parseColorOffsetKeyframe(st.c.k, 'style', 'stroke', animations, context);
+    }
   }
 
   // Opacity
@@ -753,6 +812,7 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
           break;
         // TODO Multiple fill and stroke
         case Lottie.ShapeType.Fill:
+        case Lottie.ShapeType.GradientFill:
           parseFill(
             shape as Lottie.FillShape,
             attrs,
@@ -761,6 +821,7 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
           );
           break;
         case Lottie.ShapeType.Stroke:
+        case Lottie.ShapeType.GradientStroke:
           parseStroke(
             shape as Lottie.StrokeShape,
             attrs,

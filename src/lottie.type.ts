@@ -502,6 +502,8 @@ export enum ShapeType {
   Rect = 'rc',
   Ellipse = 'el',
   Fill = 'fl',
+  GradientFill = 'gf',
+  GradientStroke = 'gs',
   Stroke = 'st',
   Transform = 'tr',
   Path = 'sh',
@@ -714,6 +716,31 @@ export type FillShape = ShapeElement & {
   r: FillRule;
 };
 
+export enum GradientType {
+  Linear = 1,
+  Radial = 2,
+}
+
+export type GradientColor = {
+  // Number of stops
+  p: number;
+  // t, r, g, b, t, r, g, b
+  k: Value;
+};
+
+export type GradientCommon = {
+  /** Gradient Type. 1: linear, 2: radial */
+  t: GradientType;
+  /** Start Point. */
+  s: MultiDimensional;
+  /** End Point. */
+  e: MultiDimensional;
+  /** Gradient Colors */
+  g: GradientColor;
+};
+
+export type GradientFillShape = Omit<FillShape, 'c'> & GradientCommon;
+
 export type StrokeShape = ShapeElement & {
   /** Stroke Opacity. */
   o: Value;
@@ -728,6 +755,8 @@ export type StrokeShape = ShapeElement & {
   /** Stroke Line Cap */
   lc: LineCap;
 };
+
+export type GradientStrokeShape = Omit<StrokeShape, 'c'> & GradientCommon;
 
 export type Asset = ImageAsset | PrecompAsset | AudioAsset | VideoAsset;
 

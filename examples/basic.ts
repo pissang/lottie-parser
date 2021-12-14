@@ -24,7 +24,7 @@ function setAnimationToLoop(elements) {
 }
 
 const config = {
-  file: 'preloader.json',
+  file: 'spooky-ghost.json',
   renderer: 'svg' as 'svg' | 'canvas',
 };
 let chart = echarts.init(document.getElementById('chart'), null, {
