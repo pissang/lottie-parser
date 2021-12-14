@@ -741,6 +741,12 @@ export type GradientCommon = {
 
 export type GradientFillShape = Omit<FillShape, 'c'> & GradientCommon;
 
+type DashItem = {
+  n: string;
+  nm: string;
+  v: { a: number; k: number; ix: number };
+};
+
 export type StrokeShape = ShapeElement & {
   /** Stroke Opacity. */
   o: Value;
@@ -754,6 +760,8 @@ export type StrokeShape = ShapeElement & {
   lj: LineJoin;
   /** Stroke Line Cap */
   lc: LineCap;
+  /** Line Dash */
+  d: DashItem[];
 };
 
 export type GradientStrokeShape = Omit<StrokeShape, 'c'> & GradientCommon;

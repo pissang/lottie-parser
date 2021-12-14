@@ -493,6 +493,22 @@ function parseStroke(
       attrs.style.lineCap = 'square';
       break;
   }
+
+  // Line dash
+  const dashArray: number[] = [];
+  let dashOffset = 0;
+  if (st.d) {
+    st.d.forEach((item) => {
+      if (item.n !== 'o') {
+        dashArray.push(item.v.k);
+      } else {
+        dashOffset = item.v.k;
+      }
+    });
+
+    attrs.style.lineDash = dashArray;
+    attrs.style.lineDashOffset = dashOffset;
+  }
 }
 
 function isBezier(k: any): k is Lottie.Bezier {
