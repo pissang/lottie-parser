@@ -15,7 +15,7 @@ interface KeyframeAnimation {
   duration?: number;
   delay?: number;
   easing?: number;
-  keyframes?: Record<string, any>[];
+  keyframes: Record<string, any>[];
 }
 
 interface CustomElementOption extends Omit<ElementProps, 'clipPath'> {
@@ -38,7 +38,7 @@ class ParseContext {
 
   assetsMap: Map<string, Lottie.Asset> = new Map();
 
-  layerSt: number;
+  layerOffsetTime: number;
 }
 
 function isNumberArray(val: any): val is number[] {
@@ -114,23 +114,27 @@ function parseKeyframe(
   kfs: Lottie.OffsetKeyframe[],
   bezierEasingDimIndex: number,
   context: ParseContext,
-  out: KeyframeAnimation,
   setVal: (kfObj: any, val: any) => void
 ) {
   const kfsLen = kfs.length;
   // const offset = context.layerStartTime;
   const duration = context.endFrame - context.startFrame;
+  const out: KeyframeAnimation = {
+    duration: 0,
+    delay: 0,
+    keyframes: [],
+  };
 
   let prevKf;
   for (let i = 0; i < kfsLen; i++) {
     const kf = kfs[i];
     const nextKf = kfs[i + 1];
     const isDiscrete = kf.h === 1;
+    const percent =
+      (kf.t + context.layerOffsetTime - context.startFrame) / duration;
+
     const outKeyframe: KeyframeAnimationKeyframe = {
-      percent: Math.max(
-        (kf.t + context.layerSt - context.startFrame) / duration,
-        0
-      ),
+      percent,
     };
     if (!isDiscrete) {
       outKeyframe.easing = getMultiDimensionEasingBezierString(
@@ -162,7 +166,7 @@ function parseKeyframe(
       // Use two keyframe to simulate the discrete animation.
       const extraKeyframe: KeyframeAnimationKeyframe = {
         percent: Math.max(
-          (nextKf.t + context.layerSt - context.startFrame) / duration,
+          (nextKf.t + context.layerOffsetTime - context.startFrame) / duration,
           0
         ),
       };
@@ -176,6 +180,8 @@ function parseKeyframe(
   if (kfsLen) {
     out.duration = context.frameTime * duration;
   }
+
+  return out;
 }
 
 function parseOffsetKeyframe(
@@ -186,19 +192,13 @@ function parseOffsetKeyframe(
   context: ParseContext,
   convertVal?: (val: number) => number
 ) {
-  const keyframeAnim = {
-    duration: 0,
-    delay: 0,
-    keyframes: [],
-  };
   // TODO merge if bezier easing is same.
   for (let dimIndex = 0; dimIndex < propNames.length; dimIndex++) {
     const propName = propNames[dimIndex];
-    parseKeyframe(
+    const keyframeAnim = parseKeyframe(
       kfs,
       dimIndex,
       context,
-      keyframeAnim,
       (outKeyframe, startVal) => {
         let val = getMultiDimensionValue(startVal, dimIndex);
         if (convertVal) {
@@ -209,10 +209,9 @@ function parseOffsetKeyframe(
           : outKeyframe)[propName] = val;
       }
     );
-  }
-
-  if (keyframeAnim.keyframes.length) {
-    keyframeAnimations.push(keyframeAnim);
+    if (keyframeAnim.keyframes.length) {
+      keyframeAnimations.push(keyframeAnim);
+    }
   }
 }
 
@@ -223,16 +222,16 @@ function parseColorOffsetKeyframe(
   keyframeAnimations: KeyframeAnimation[],
   context: ParseContext
 ) {
-  const keyframeAnim = {
-    duration: 0,
-    delay: 0,
-    keyframes: [],
-  };
-  parseKeyframe(kfs, 0, context, keyframeAnim, (outKeyframe, startVal) => {
-    (targetPropName ? (outKeyframe[targetPropName] = {} as any) : outKeyframe)[
-      propName
-    ] = toColorString(startVal);
-  });
+  const keyframeAnim = parseKeyframe(
+    kfs,
+    0,
+    context,
+    (outKeyframe, startVal) => {
+      (targetPropName
+        ? (outKeyframe[targetPropName] = {} as any)
+        : outKeyframe)[propName] = toColorString(startVal);
+    }
+  );
   if (keyframeAnim.keyframes.length) {
     keyframeAnimations.push(keyframeAnim);
   }
@@ -520,16 +519,10 @@ function parseShapePaths(
       close: shape.ks.k.c,
     };
   } else if (Array.isArray(shape.ks.k)) {
-    const keyframeAnim = {
-      duration: 0,
-      delay: 0,
-      keyframes: [],
-    };
-    parseKeyframe(
+    const keyframeAnim = parseKeyframe(
       shape.ks.k as any as Lottie.OffsetKeyframe[],
       0,
       context,
-      keyframeAnim,
       (outKeyframe, startVal) => {
         outKeyframe.shape = {
           in: startVal[0].i,
@@ -923,8 +916,6 @@ function parseLayers(
   layers: Lottie.Layer[],
   context: ParseContext,
   precompLayerTl?: {
-    ip: number;
-    op: number;
     st: number;
   }
 ) {
@@ -933,11 +924,16 @@ function parseLayers(
   // Order is reversed
   layers = layers.slice().reverse();
   const layerIndexMap: Record<number, CustomElementOption> = {};
+  const offsetTime = precompLayerTl?.st || 0;
+
   layers?.forEach((layer) => {
+    // Layer time is offseted by the precomp layer.
+
     // Use the ip, op, st of ref from.
-    const layerIp = precompLayerTl ? precompLayerTl.ip : layer.ip;
-    const layerOp = precompLayerTl ? precompLayerTl.op : layer.op;
-    const layerSt = (context.layerSt = (precompLayerTl?.st || 0) + layer.st);
+    const layerIp = offsetTime + layer.ip;
+    const layerOp = offsetTime + layer.op;
+    const layerSt = offsetTime + layer.st;
+    context.layerOffsetTime = offsetTime;
 
     let layerGroup;
     switch (layer.ty) {
@@ -962,8 +958,6 @@ function parseLayers(
             )?.layers || [],
             context,
             {
-              ip: layer.ip,
-              op: layer.op,
               st: layerSt,
             }
           ),
@@ -1023,7 +1017,7 @@ function parseLayers(
         (layerIp > context.startFrame || layerOp < context.endFrame)
       ) {
         const duration = context.endFrame - context.startFrame;
-        const keyframeAnimation = {
+        const enterAndLeaveAnim = {
           duration: duration * context.frameTime,
           keyframes: [
             {
@@ -1037,14 +1031,14 @@ function parseLayers(
           ],
         };
         if ((layerOp - context.startFrame) / duration < 1) {
-          keyframeAnimation.keyframes.push({
+          enterAndLeaveAnim.keyframes.push({
             ignore: true,
             percent: (layerOp - context.startFrame) / duration,
           });
         }
         finalLayerGroup.keyframeAnimation =
           finalLayerGroup.keyframeAnimation || [];
-        finalLayerGroup.keyframeAnimation.push(keyframeAnimation);
+        finalLayerGroup.keyframeAnimation.push(enterAndLeaveAnim);
       }
 
       elements.push(finalLayerGroup);

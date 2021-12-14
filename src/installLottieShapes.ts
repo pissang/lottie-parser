@@ -120,7 +120,7 @@ function eachSegment(
     return;
   }
 
-  for (let i = 1; i < vPts.length; i++) {
+  for (let i = 1; i < len; i++) {
     const prev = i - 1;
     if (
       !isAroundEqual(outPts[prev], vPts[prev]) ||
@@ -186,12 +186,12 @@ function buildCustomPath(
   }
 
   if (trimStart > 0 || trimEnd < 1) {
-    let segLens: number[];
+    let segLens: number[] = [];
     let totalLen = 0;
-    segLens = (this as any)._segLens || ((this as any)._segLens = []);
+    // segLens = (this as any)._segLens || ((this as any)._segLens = []);
     let idx = 0;
-    eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
-      const len =
+    eachSegment(inPts, outPts, vPts, false, (pt0, pt1, pt2, pt3) => {
+      const segLen =
         pt2 && pt3
           ? cubicLength(
               pt0[0],
@@ -205,15 +205,15 @@ function buildCustomPath(
               10
             )
           : Math.sqrt((pt0[0] - pt1[0]) ** 2 + (pt0[1] - pt1[1]) ** 2);
-      segLens[idx] = len;
-      totalLen += len;
+      segLens[idx++] = segLen;
+      totalLen += segLen;
     });
 
     const trimedStartLen = trimStart * totalLen;
     const trimedEndLen = trimEnd * totalLen;
     let currLen = 0;
     let segIdx = 0;
-    eachSegment(inPts, outPts, vPts, shape.close, (pt0, pt1, pt2, pt3) => {
+    eachSegment(inPts, outPts, vPts, false, (pt0, pt1, pt2, pt3) => {
       const segLen = segLens[segIdx];
 
       // All trimed
@@ -309,10 +309,9 @@ function buildCustomPath(
       }
       isFirst = false;
     });
-  }
-
-  if (shape.close) {
-    ctx.closePath();
+    if (shape.close) {
+      ctx.closePath();
+    }
   }
 }
 
