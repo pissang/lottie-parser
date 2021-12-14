@@ -1037,15 +1037,19 @@ function parseLayers(
           duration: duration * context.frameTime,
           keyframes: [
             {
-              ignore: true,
-              percent: 0,
-            },
-            {
               ignore: false,
               percent: (layerIp - context.startFrame) / duration,
             },
           ],
         };
+        if (layerIp > context.startFrame) {
+          // Add initial keyframe.
+          // NOTE: layerIp may be earlier than startFrame. In this case the first frame has negative percent.
+          enterAndLeaveAnim.keyframes.unshift({
+            ignore: true,
+            percent: 0,
+          });
+        }
         if ((layerOp - context.startFrame) / duration < 1) {
           enterAndLeaveAnim.keyframes.push({
             ignore: true,
