@@ -20,8 +20,6 @@ interface KeyframeAnimation {
 
 interface CustomElementOption extends Omit<ElementProps, 'clipPath'> {
   type: string;
-  anchorX?: number;
-  anchorY?: number;
 
   keyframeAnimation?: KeyframeAnimation[];
   children?: CustomElementOption[];
@@ -353,7 +351,6 @@ function parseTransforms(
     context
   );
 
-  // TODO opacity.
   // TODO sk: skew, sa: skew axis
   // TODO px, py
 }
@@ -605,94 +602,6 @@ function parseShapeEllipse(
   return attrs;
 }
 
-function pickKeyframeAnimationsByKeys(
-  keyframeAnimations: KeyframeAnimation[],
-  keyNames: string[]
-) {
-  const animationsWithKey: KeyframeAnimation[] = [];
-  const animationsWithoutKey: KeyframeAnimation[] = [];
-
-  keyframeAnimations.forEach((kfAnim) => {
-    const hasKey = !!kfAnim.keyframes?.find((kf) => {
-      return !!keyNames.find((keyName) => kf[keyName] != null);
-    });
-    if (hasKey) {
-      animationsWithKey.push(kfAnim);
-    } else {
-      animationsWithoutKey.push(kfAnim);
-    }
-  });
-
-  return [animationsWithKey, animationsWithoutKey];
-}
-
-function pickProps(obj: any, keyNames: string[]) {
-  const picked: any = {};
-  const other: any = {};
-  Object.keys(obj).forEach((key) => {
-    if (keyNames.indexOf(key) >= 0) {
-      picked[key] = obj[key];
-    } else {
-      other[key] = obj[key];
-    }
-  });
-  return [picked, other];
-}
-
-const transformKeys = ['x', 'y', 'scaleX', 'scaleY', 'rotation'];
-function createNewGroupForAnchor(el: CustomElementOption) {
-  const keyframeAnimations = el.keyframeAnimation;
-  const [anchorAnimations, otherAnimtions] = pickKeyframeAnimationsByKeys(
-    keyframeAnimations || [],
-    ['anchorX', 'anchorY']
-  );
-  const anchorX = (el as any).anchorX;
-  const anchorY = (el as any).anchorY;
-  // echarts doesn't have anchor transform. Use a separate group.
-  if (anchorX || anchorY || anchorAnimations.length) {
-    const [transformAnimations, nonTransformAnimations] =
-      pickKeyframeAnimationsByKeys(otherAnimtions, transformKeys);
-    const [transformAttrs, nonTransformAttrs] = pickProps(el, transformKeys);
-
-    const dummy = nonTransformAttrs as CustomElementOption;
-    el = {
-      type: 'group',
-      children: [dummy],
-      ...transformAttrs,
-    };
-    dummy.x = -anchorX || 0;
-    dummy.y = -anchorY || 0;
-
-    if (nonTransformAnimations.length || anchorAnimations.length) {
-      anchorAnimations.forEach((anim) => {
-        anim.keyframes?.forEach((kf) => {
-          if (kf.anchorX) {
-            kf.x = -anchorX;
-            delete kf.anchorX;
-          }
-          if (kf.anchorY) {
-            kf.y = -anchorY;
-            delete kf.anchorY;
-          }
-        });
-      });
-      dummy.keyframeAnimation = [
-        ...nonTransformAnimations,
-        ...anchorAnimations,
-      ];
-    } else {
-      dummy.keyframeAnimation = undefined;
-    }
-
-    if (transformAnimations.length) {
-      el.keyframeAnimation = transformAnimations;
-    }
-    return el;
-  }
-
-  return el;
-}
-
 function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
   function tryCreateShape(
     shape: Lottie.ShapeElement,
@@ -867,19 +776,18 @@ function parseShapeLayer(layer: Lottie.ShapeLayer, context: ParseContext) {
         ];
       }
 
-      ecEls[idx] = createNewGroupForAnchor(el);
+      ecEls[idx] = el;
     });
     return ecEls;
   }
 
-  const layerGroup: CustomElementOption = {
+  return {
     type: 'group',
     children: parseIterations(layer.shapes, {
       attrs: {},
       keyframeAnimations: [],
     }),
-  };
-  return createNewGroupForAnchor(layerGroup);
+  } as CustomElementOption;
 }
 
 function traverse(
@@ -928,6 +836,21 @@ function addLayerOpacity(
   }
 }
 
+function parseSolidShape(layer: Lottie.SolidColorLayer) {
+  return {
+    type: 'rect',
+    shape: {
+      x: 0,
+      y: 0,
+      width: layer.sw,
+      height: layer.sh,
+    },
+    style: {
+      fill: layer.sc,
+    },
+  } as CustomElementOption;
+}
+
 function parseLayers(
   layers: Lottie.Layer[],
   context: ParseContext,
@@ -951,17 +874,27 @@ function parseLayers(
     const layerSt = offsetTime + layer.st;
     context.layerOffsetTime = offsetTime;
 
-    let layerGroup;
+    let layerGroup: CustomElementOption | undefined;
     switch (layer.ty) {
       case Lottie.LayerType.shape:
         layerGroup = parseShapeLayer(layer as Lottie.ShapeLayer, context);
         break;
       case Lottie.LayerType.null:
-      case Lottie.LayerType.solid: // TODO
         layerGroup = {
           type: 'group',
           children: [],
         };
+        break;
+      case Lottie.LayerType.solid:
+        layerGroup = {
+          type: 'group',
+          children: [],
+        };
+        if ((layer as Lottie.SolidColorLayer).sc) {
+          layerGroup.children!.push(
+            parseSolidShape(layer as Lottie.SolidColorLayer)
+          );
+        }
         break;
       case Lottie.LayerType.precomp:
         layerGroup = {
@@ -988,16 +921,12 @@ function parseLayers(
       };
       layer.ks && parseTransforms(layer.ks, attrs, keyframeAnimations, context);
 
-      if (keyframeAnimations.length) {
-        layerGroup.keyframeAnimation = keyframeAnimations;
-      }
       Object.assign(layerGroup, attrs);
       if (layer.ind != null) {
         layerIndexMap[layer.ind] = layerGroup;
       }
 
-      const finalLayerGroup = createNewGroupForAnchor(layerGroup);
-      finalLayerGroup.extra = {
+      layerGroup.extra = {
         layerParent: layer.parent,
       };
       // Masks
@@ -1013,18 +942,18 @@ function parseLayers(
           context
         );
 
-        finalLayerGroup.clipPath = {
+        layerGroup.clipPath = {
           type: 'lottie-shape-path',
           ...attrs,
         };
         // Must have fill
-        finalLayerGroup.clipPath!.style!.fill = '#000';
+        layerGroup.clipPath!.style!.fill = '#000';
         if (maskKeyframeAnimations.length) {
-          finalLayerGroup.clipPath!.keyframeAnimation = maskKeyframeAnimations;
+          layerGroup.clipPath!.keyframeAnimation = maskKeyframeAnimations;
         }
       }
 
-      addLayerOpacity(layer, finalLayerGroup, context);
+      addLayerOpacity(layer, layerGroup, context);
 
       // Update in and out animation.
       if (
@@ -1056,12 +985,13 @@ function parseLayers(
             percent: (layerOp - context.startFrame) / duration,
           });
         }
-        finalLayerGroup.keyframeAnimation =
-          finalLayerGroup.keyframeAnimation || [];
-        finalLayerGroup.keyframeAnimation.push(enterAndLeaveAnim);
+        keyframeAnimations.push(enterAndLeaveAnim);
+      }
+      if (keyframeAnimations.length) {
+        layerGroup.keyframeAnimation = keyframeAnimations;
       }
 
-      elements.push(finalLayerGroup);
+      elements.push(layerGroup);
     }
   });
 
@@ -1069,7 +999,6 @@ function parseLayers(
   return elements.filter((el) => {
     const parentLayer = layerIndexMap[el.extra?.layerParent as any];
     if (parentLayer) {
-      // Has anchor
       parentLayer.children?.push(el);
       return false;
     }
