@@ -2,6 +2,10 @@
 
 Parsing lottie files and display it in the Apache ECharts.
 
+## Demo
+
+[![Edit eager-ives-yiqn7](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/eager-ives-yiqn7?fontsize=14&hidenavigation=1&theme=dark)
+
 ## Install
 
 ```bash
