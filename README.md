@@ -22,7 +22,10 @@ const chart = echarts.init(dom);
 fetch(`lottie.json`)
   .then((response) => response.json())
   .then((data) => {
-    const { elements, width, height } = lottieParser.parse(data);
+    const { elements, width, height } = lottieParser.parse(data, {
+      // 循环播放动画
+      loop: true,
+    });
 
     // Scale to 400px
     const scale = 400 / Math.min(width, height);

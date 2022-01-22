@@ -5,27 +5,16 @@ lottieParser.install(echarts);
 
 let chart = echarts.init(document.getElementById('chart'));
 
-function setAnimationToLoop(elements) {
-  elements.forEach((el) => {
-    el.keyframeAnimation?.forEach((anim) => {
-      anim.loop = true;
-    });
-
-    if (el.children) {
-      setAnimationToLoop(el.children);
-    }
-  });
-}
-
 Promise.all([
   fetch(`./data/rocket-lunch.json`).then((response) => response.json()),
   fetch(`./asset/Map_of_Iceland.svg`).then((response) => response.text()),
 ]).then(([lottieData, svgData]) => {
-  const result = lottieParser.parse(lottieData);
+  const result = lottieParser.parse(lottieData, {
+    loop: true,
+  });
   echarts.registerMap('iceland_svg', {
     svg: svgData,
   });
-  setAnimationToLoop(result.elements);
 
   chart.setOption({
     geo: {

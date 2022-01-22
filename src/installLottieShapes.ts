@@ -1,4 +1,4 @@
-import { graphic } from 'echarts';
+import type { graphic } from 'echarts';
 import { rotate } from 'zrender/lib/core/matrix';
 import { applyTransform } from 'zrender/lib/core/vector';
 import { cubicLength, cubicSubdivide } from 'zrender/lib/core/curve';

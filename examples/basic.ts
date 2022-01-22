@@ -11,17 +11,6 @@ function childrenHasName(el, name) {
     (el.children && el.children.find((child) => childrenHasName(child, name)))
   );
 }
-function setAnimationToLoop(elements) {
-  elements.forEach((el) => {
-    el.keyframeAnimation?.forEach((anim) => {
-      anim.loop = true;
-    });
-
-    if (el.children) {
-      setAnimationToLoop(el.children);
-    }
-  });
-}
 
 const config = {
   file: 'rocket.json',
@@ -45,9 +34,9 @@ function displayLottie() {
         animationData: JSON.parse(JSON.stringify(data)),
       });
 
-      const result = lottieParser.parse(data);
-
-      setAnimationToLoop(result.elements);
+      const result = lottieParser.parse(data, {
+        loop: true,
+      });
 
       const scale = Math.min(400 / result.width, 400 / result.height);
 

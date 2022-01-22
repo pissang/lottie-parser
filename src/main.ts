@@ -15,6 +15,7 @@ interface KeyframeAnimation {
   duration?: number;
   delay?: number;
   easing?: number;
+  loop?: boolean;
   keyframes: Record<string, any>[];
 }
 
@@ -1006,9 +1007,15 @@ function parseLayers(
   });
 }
 
-export function parse(data: Lottie.Animation) {
+export function parse(
+  data: Lottie.Animation,
+  opts?: {
+    loop?: boolean;
+  }
+) {
   completeData(data);
   const context = new ParseContext();
+  opts = opts || {};
 
   context.frameTime = 1000 / (data.fr || 30);
   context.startFrame = data.ip;
@@ -1020,10 +1027,38 @@ export function parse(data: Lottie.Animation) {
 
   const elements = parseLayers(data.layers || [], context);
 
+  function eachElement(
+    elements: CustomElementOption[],
+    cb: (el: CustomElementOption) => void
+  ) {
+    elements.forEach((el) => {
+      // el.keyframeAnimation?.forEach((anim) => {
+      //   anim.loop = true;
+      // });
+      cb(el);
+
+      if (el.children) {
+        eachElement(el.children, cb);
+      }
+    });
+  }
+
+  if (opts.loop) {
+    eachElement(elements, (el) => {
+      el.keyframeAnimation?.forEach((anim) => {
+        anim.loop = true;
+      });
+    });
+  }
+
   return {
     width: data.w,
     height: data.h,
     elements,
+
+    each: (cb: (el: CustomElementOption) => void) => {
+      eachElement(elements, cb);
+    },
   };
 }
 

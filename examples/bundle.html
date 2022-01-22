@@ -27,7 +27,9 @@
       fetch(`./data/loading.json`)
         .then((response) => response.json())
         .then((data) => {
-          const { elements, width, height } = lottieParser.parse(data);
+          const { elements, width, height } = lottieParser.parse(data, {
+            loop: true,
+          });
 
           // Scale to 200px
           const scale = 200 / Math.min(width, height);
