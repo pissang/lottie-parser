@@ -1,5 +1,5 @@
 {
-  "name": "polygon-straight-skeleton",
+  "name": "lottie-parser",
   "version": "0.1.0",
   "main": "dist/lottie-parser.js",
   "module": "dist/lottie-parser.es.js",
