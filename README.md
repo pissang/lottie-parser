@@ -57,4 +57,4 @@ fetch(`lottie.json`)
 - Repeat on the rect and ellipsis doesn't support trim yet.
 - Gradient animation is not supported.
 
-Some other unknown issues can be reported in the issue.
+Some other unknown issues can be reported in the issue list.
