@@ -862,7 +862,7 @@ function parseLayers(
 
   // Order is reversed
   layers = layers.slice().reverse();
-  const layerIndexMap: Record<number, CustomElementOption> = {};
+  const layerIndexMap: Map<number, CustomElementOption> = new Map();
   const offsetTime = precompLayerTl?.st || 0;
 
   layers?.forEach((layer) => {
@@ -923,7 +923,7 @@ function parseLayers(
 
       Object.assign(layerGroup, attrs);
       if (layer.ind != null) {
-        layerIndexMap[layer.ind] = layerGroup;
+        layerIndexMap.set(layer.ind, layerGroup);
       }
 
       layerGroup.extra = {
@@ -997,7 +997,7 @@ function parseLayers(
 
   // Build hierarchy
   return elements.filter((el) => {
-    const parentLayer = layerIndexMap[el.extra?.layerParent as any];
+    const parentLayer = layerIndexMap.get(el.extra?.layerParent as any);
     if (parentLayer) {
       parentLayer.children?.push(el);
       return false;

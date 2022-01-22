@@ -24,7 +24,7 @@ function setAnimationToLoop(elements) {
 }
 
 const config = {
-  file: 'spooky-ghost.json',
+  file: 'rocket.json',
   renderer: 'svg' as 'svg' | 'canvas',
 };
 let chart = echarts.init(document.getElementById('chart'), null, {
@@ -80,16 +80,26 @@ pane
   .addInput(config, 'file', {
     options: [
       'adrock.json',
-      'failed-location-verification.json',
       'gatin.json',
+      'bodymovin.json',
+      'failed-location-verification.json',
       'kadokado-heart.json',
       'liquid-blobby-loader-green.json',
       'pin-location.json',
       'rocket.json',
+      'rocket-lunch.json',
+      'walking.json',
       'cat-loader.json',
       'multiple-spinning-dotted-rings-loading.json',
       'spooky-ghost.json',
       'preloader.json',
+      'check-mark-success.json',
+      'gradient-animated-background.json',
+      'splashy-loader.json',
+      'loading.json',
+      'location.json',
+      'sci-fi-background.json',
+      'bouncy-mapmaker.json',
       'echarts-www/bg.json',
       'echarts-www/analysis.json',
       'echarts-www/chart.json',

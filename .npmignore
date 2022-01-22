@@ -1,0 +1,6 @@
+.vscode
+/examples
+/schema
+/scripts
+.DS_Store
+.pnpm-debug.log

@@ -9,14 +9,15 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/main.ts'),
       name: 'lottieParser',
-      fileName: (format) => `lottie-parser.${format}.js`,
+      fileName: (format) =>
+        format === 'umd' ? `lottie-parser.js` : `lottie-parser.${format}.js`,
     },
     rollupOptions: {},
   },
   resolve: {
-    alias: {
-      echarts: '/Users/lang/Develop/echarts',
-      zrender: '/Users/lang/Develop/zrender',
-    },
+    // alias: {
+    //   echarts: '/Users/lang/Develop/echarts',
+    //   zrender: '/Users/lang/Develop/zrender',
+    // },
   },
 });

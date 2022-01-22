@@ -2,3 +2,4 @@ node_modules
 .pnpm-debug.log
 .DS_Store
 /schema
+/dist

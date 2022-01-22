@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Basic Example</title>
+  </head>
+  <body>
+    <style>
+      #chart {
+        display: inline-block;
+        width: 400px;
+        height: 400px;
+      }
+    </style>
+    <div id="chart"></div>
+
+    <script type="module">
+      import * as echarts from 'https://unpkg.com/echarts-nightly@5.2.3-dev.20220121/dist/echarts.esm.js';
+      import * as lottieParser from '../dist/lottie-parser.es.js';
+
+      lottieParser.install(echarts);
+
+      const chart = echarts.init(document.getElementById('chart'));
+
+      fetch(`./data/loading.json`)
+        .then((response) => response.json())
+        .then((data) => {
+          const { elements, width, height } = lottieParser.parse(data);
+
+          // Scale to 200px
+          const scale = 200 / Math.min(width, height);
+
+          chart.setOption({
+            graphic: {
+              elements: [
+                {
+                  type: 'group',
+                  scaleX: scale,
+                  scaleY: scale,
+                  // Elements is compatitable with echarts graphic.
+                  children: elements,
+                },
+              ],
+            },
+          });
+        });
+    </script>
+  </body>
+</html>

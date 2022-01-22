@@ -1,4 +1,4 @@
-import { graphic, number } from 'echarts';
+import { graphic } from 'echarts';
 import { rotate } from 'zrender/lib/core/matrix';
 import { applyTransform } from 'zrender/lib/core/vector';
 import { cubicLength, cubicSubdivide } from 'zrender/lib/core/curve';
@@ -353,7 +353,7 @@ export function install(echarts: {
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
       withRepeat(
         // TODO trim, transform repeat
-        (ctx, shape, transform) => {
+        (ctx, shape) => {
           let x = shape.cx;
           let y = shape.cy;
           let a = shape.rx;
@@ -395,7 +395,7 @@ export function install(echarts: {
     buildPath(ctx, shape: Record<string, any> & ShapeRepeat) {
       withRepeat(
         // TODO trim, transform repeat
-        (ctx, shape, transform) => {
+        (ctx, shape) => {
           let width = shape.width;
           let height = shape.height;
           let x = shape.x - width / 2;
